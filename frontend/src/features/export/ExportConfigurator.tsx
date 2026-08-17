@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, api } from '@/api/client';
+import { uniqueDocumentIds } from '@/features/export/documentSelection';
 import type {
   ExportDefinition,
   ExportPolicy,
@@ -36,10 +37,20 @@ export function ExportConfigurator({
     [profile],
   );
 
+  const { keep: uniqueIds, dropped: duplicateHints } = useMemo(
+    () => uniqueDocumentIds(documents),
+    [documents],
+  );
+  const hintById = useMemo(
+    () => new Map(duplicateHints.map((hint) => [hint.id, hint])),
+    [duplicateHints],
+  );
+
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>(() => {
     const ready = new Set(documents.map((d) => d.id));
-    const initial = initialDocumentIds.filter((id) => ready.has(id));
-    return initial.length > 0 ? initial : documents.map((d) => d.id);
+    const unique = new Set(uniqueDocumentIds(documents).keep);
+    const initial = initialDocumentIds.filter((id) => ready.has(id) && unique.has(id));
+    return initial.length > 0 ? initial : [...unique];
   });
   const [columnKeys, setColumnKeys] = useState<string[]>(profile.defaultExportColumns);
   const [filterColumn, setFilterColumn] = useState(profile.defaultFilterColumn);
@@ -93,16 +104,16 @@ export function ExportConfigurator({
 
   // Keep selection in sync when documents appear or disappear after extraction.
   useEffect(() => {
-    const readyIds = documents.map((d) => d.id);
-    const ready = new Set(readyIds);
+    const ready = new Set(documents.map((d) => d.id));
+    const unique = new Set(uniqueIds);
     setSelectedDocumentIds((current) => {
       const kept = current.filter((id) => ready.has(id));
-      const added = readyIds.filter((id) => !current.includes(id));
-      if (current.length === 0) return readyIds;
+      const added = uniqueIds.filter((id) => !current.includes(id));
+      if (current.length === 0) return uniqueIds;
       if (added.length === 0 && kept.length === current.length) return current;
-      return [...kept, ...added];
+      return [...kept.filter((id) => unique.has(id) || current.includes(id)), ...added];
     });
-  }, [documents]);
+  }, [documents, uniqueIds]);
 
   // Any configuration change invalidates the preview.
   useEffect(() => {
@@ -206,14 +217,20 @@ export function ExportConfigurator({
                 <button type="button" onClick={selectNoDocuments}>
                   Odznacz wszystkie
                 </button>
+                {duplicateHints.length > 0 && (
+                  <button type="button" onClick={() => setSelectedDocumentIds(uniqueIds)}>
+                    Pomiń duplikaty
+                  </button>
+                )}
                 {documents.some((d) => (d.issueCounts.critical ?? 0) > 0) && (
                   <button
                     type="button"
                     onClick={() =>
                       setSelectedDocumentIds(
-                        documents
-                          .filter((d) => (d.issueCounts.critical ?? 0) === 0)
-                          .map((d) => d.id),
+                        uniqueIds.filter((id) => {
+                          const doc = documents.find((d) => d.id === id);
+                          return (doc?.issueCounts.critical ?? 0) === 0;
+                        }),
                       )
                     }
                   >
@@ -225,6 +242,11 @@ export function ExportConfigurator({
                 {documents.map((doc) => {
                   const checked = selectedDocumentIds.includes(doc.id);
                   const critical = doc.issueCounts.critical ?? 0;
+                  const hint = hintById.get(doc.id);
+                  const period =
+                    doc.periodFrom && doc.periodTo
+                      ? `${doc.periodFrom.slice(0, 4)}–${doc.periodTo.slice(0, 4) === doc.periodFrom.slice(0, 4) ? doc.periodTo.slice(5) : doc.periodTo}`
+                      : null;
                   return (
                     <li key={doc.id}>
                       <input
@@ -235,7 +257,20 @@ export function ExportConfigurator({
                       />
                       <label htmlFor={`doc-${doc.id}`}>{doc.originalName}</label>
                       <span className="spacer" />
+                      {period && <span className="small muted">{period}</span>}
                       <span className="small muted mono">{doc.recordCount} wierszy</span>
+                      {hint && (
+                        <span
+                          className="status-chip review"
+                          title={
+                            hint.reason === 'kopia'
+                              ? `Ta sama księga co ${hint.ofName}`
+                              : `Okres zawiera się w ${hint.ofName}`
+                          }
+                        >
+                          {hint.reason === 'kopia' ? 'kopia' : 'wycinek'}
+                        </span>
+                      )}
                       {critical > 0 && (
                         <span className="status-chip critical" title="Blokuje eksport w trybie strict">
                           {critical} krytyczne
