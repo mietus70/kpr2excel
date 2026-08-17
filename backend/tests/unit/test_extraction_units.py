@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import datetime as _dt
+
 import pytest
 
 from kpir_converter.application.extraction import (
+    _fill_missing_boundaries,
     assemble_text,
     detect_column_layout,
     detect_table_zone,
@@ -12,6 +15,7 @@ from kpir_converter.application.extraction import (
     match_profile,
     segment_rows,
 )
+from kpir_converter.application.services import _detect_period
 from kpir_converter.domain.geometry import group_tokens_into_lines
 from kpir_converter.domain.models import Token
 from kpir_converter.domain.profiles import profile_from_dict
@@ -389,3 +393,45 @@ class TestExtractPageEdgeCases:
         )
         assert result.records[0].logical_index == 7
         assert result.records[0].source_page_from == 2
+
+
+class TestPeriodDetection:
+    """Okres musi pochodzić z nagłówka, nie z numerów dowodów."""
+
+    def test_period_from_header_range(self) -> None:
+        start, end = _detect_period(
+            ["KSIAZKA PRZYCHODOW I ROZCHODOW za okres od 01.01.2023 do 30.04.2023"]
+        )
+        assert (start, end) == (_dt.date(2023, 1, 1), _dt.date(2023, 4, 30))
+
+    def test_evidence_numbers_do_not_create_period(self) -> None:
+        assert _detect_period(["XX/YY/99/1/0002 11/02/0333 ABC/00009/07/44"]) == (None, None)
+
+    def test_header_range_wins_over_stray_numbers(self) -> None:
+        start, end = _detect_period(["za okres od 01.01.2018 do 31.12.2018 11/02/0002 22/09/0333"])
+        assert start.year == 2018 and end.year == 2018
+
+    def test_implausible_year_is_rejected(self) -> None:
+        assert _detect_period(["11.02.0002"]) == (None, None)
+
+    def test_standalone_dates_still_detected(self) -> None:
+        start, end = _detect_period(["02.01.2018", "31.12.2018"])
+        assert (start, end) == (_dt.date(2018, 1, 2), _dt.date(2018, 12, 31))
+
+
+class TestRulerWithMissingCells:
+    """Ruler z brakującymi celami nie może unieważniać całego układu."""
+
+    def test_trailing_gaps_are_interpolated(self) -> None:
+        nan = float("nan")
+        filled = _fill_missing_boundaries(
+            [("a", 0.0, 0.1), ("b", 0.1, 0.5), ("c", nan, nan), ("d", nan, nan)]
+        )
+        assert all(x0 == x0 for _key, x0, _x1 in filled)
+        assert [key for key, _x0, _x1 in filled] == ["a", "b", "c", "d"]
+        assert all(filled[i][1] <= filled[i + 1][1] for i in range(len(filled) - 1))
+
+    def test_middle_gap_stays_between_neighbours(self) -> None:
+        nan = float("nan")
+        filled = _fill_missing_boundaries([("a", 0.0, 0.1), ("b", nan, nan), ("c", 0.5, 0.6)])
+        assert 0.1 <= filled[1][1] <= 0.5

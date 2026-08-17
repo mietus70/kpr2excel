@@ -226,7 +226,19 @@ class ImportService:
 # Extraction
 # --------------------------------------------------------------------------------------
 
-_PERIOD_RE = re.compile(r"(\d{2})[.\-/](\d{2})[.\-/](\d{4})")
+# Zakres z nagłówka: "za okres od 01.01.2023 do 30.04.2023".
+# Fraza "od ... do ..." jest kotwicą - bez niej łapaliśmy fragmenty numerów
+# dowodów ("XX/YY/99/1/0002" -> rok 0002) i okres wychodził absurdalny.
+_PERIOD_RANGE_RE = re.compile(
+    r"(?i)okres\w*\s*(?:od\s*)?"
+    r"(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})"
+    r"\s*(?:do|-|–|—|\.\.)\s*"
+    r"(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})"
+)
+# Zapasowo pojedyncze pełne daty, ale tylko jako samodzielne słowa.
+_PERIOD_RE = re.compile(r"(?<![\d/.\-])(\d{2})[.\-/](\d{2})[.\-/](\d{4})(?![\d/.\-])")
+# Rozsądny zakres lat dla dokumentu księgowego.
+_PLAUSIBLE_YEARS = (1990, 2100)
 
 
 class ExtractionService:
@@ -482,10 +494,31 @@ def _cross_page_issues(
 
 
 def _detect_period(texts: Sequence[str]) -> tuple[_dt.date | None, _dt.date | None]:
-    """Best effort period detection; never fabricated when unclear."""
+    """Best effort period detection; never fabricated when unclear.
+
+    Preferowane jest jawne "za okres od X do Y" z nagłówka. Dopiero gdy go nie
+    ma, bierzemy pod uwagę pojedyncze pełne daty - i tylko takie, które są
+    samodzielnymi słowami oraz mają sensowny rok. Bez tego fragmenty numerów
+    dowodów (np. "XX/YY/99/1/0002") dawały okres z roku 0002, co następnie
+    psuło rozwijanie wszystkich dat dwucyfrowych.
+    """
+    for text in texts:
+        match = _PERIOD_RANGE_RE.search(text)
+        if not match:
+            continue
+        d1, m1, y1, d2, m2, y2 = (int(g) for g in match.groups())
+        try:
+            start, end = _dt.date(y1, m1, d1), _dt.date(y2, m2, d2)
+        except ValueError:
+            continue
+        if start <= end:
+            return start, end
+
     dates: list[_dt.date] = []
     for text in texts:
         for day, month, year in _PERIOD_RE.findall(text):
+            if not _PLAUSIBLE_YEARS[0] <= int(year) <= _PLAUSIBLE_YEARS[1]:
+                continue
             try:
                 dates.append(_dt.date(int(year), int(month), int(day)))
             except ValueError:

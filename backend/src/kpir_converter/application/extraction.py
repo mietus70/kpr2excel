@@ -375,13 +375,29 @@ def _boundaries_from_number_ruler(
     ordered = sorted(profile.columns, key=lambda c: c.x0)
     boundaries: list[tuple[str, float, float]] = []
 
+    # Older printouts may emit fewer ruler cells than the profile has columns
+    # (e.g. a 16-column form read with the 17-column profile). Rather than
+    # discarding the ruler entirely - which drops the layout back to the raw
+    # template and shifts every column - the trailing profile columns without a
+    # ruler cell are interpolated from the last matched one.
+    missing = [
+        c.key
+        for c in ordered
+        if not (c.form_number or "").isdigit() or int(c.form_number) not in extent
+    ]
+    if missing and len(missing) > len(ordered) // 3:
+        return None
+
     for column in ordered:
         try:
             form_number = int(column.form_number) if column.form_number else None
         except ValueError:
             form_number = None
         if form_number is None or form_number not in extent:
-            return None
+            # Brak celi w rulerze: kolumna zostanie dopasowana niżej,
+            # po zamknięciu luk między sąsiadami.
+            boundaries.append((column.key, float("nan"), float("nan")))
+            continue
         siblings = [c for c in ordered if c.form_number == column.form_number]
         x0, x1 = extent[form_number]
         if len(siblings) == 1:
@@ -399,6 +415,11 @@ def _boundaries_from_number_ruler(
             )
         )
 
+    # Fill columns that had no ruler cell by splitting the gap between their
+    # matched neighbours evenly.
+    if any(_is_nan(x0) for _key, x0, _x1 in boundaries):
+        boundaries = _fill_missing_boundaries(boundaries)
+
     # Close the gaps between ruler cells so no token falls between columns.
     closed: list[tuple[str, float, float]] = []
     for index, (key, x0, x1) in enumerate(boundaries):
@@ -406,6 +427,39 @@ def _boundaries_from_number_ruler(
         right = 1.0 if index == len(boundaries) - 1 else (x1 + boundaries[index + 1][1]) / 2
         closed.append((key, _clamp(left), _clamp(right)))
     return _repair_monotonic(closed)
+
+
+def _is_nan(value: float) -> bool:
+    return value != value
+
+
+def _fill_missing_boundaries(
+    boundaries: list[tuple[str, float, float]],
+) -> list[tuple[str, float, float]]:
+    """Interpolate columns that had no matching ruler cell.
+
+    Consecutive gaps are split evenly between their nearest matched
+    neighbours, so column order and monotonicity are preserved.
+    """
+    filled = list(boundaries)
+    index = 0
+    while index < len(filled):
+        if not _is_nan(filled[index][1]):
+            index += 1
+            continue
+        run_end = index
+        while run_end + 1 < len(filled) and _is_nan(filled[run_end + 1][1]):
+            run_end += 1
+        left = 0.0 if index == 0 else filled[index - 1][2]
+        right = 1.0 if run_end + 1 >= len(filled) else filled[run_end + 1][1]
+        count = run_end - index + 1
+        step = (right - left) / count if right > left else 0.0
+        for offset in range(count):
+            key = filled[index + offset][0]
+            x0 = left + step * offset
+            filled[index + offset] = (key, _clamp(x0), _clamp(x0 + step))
+        index = run_end + 1
+    return filled
 
 
 def _scale_template(
