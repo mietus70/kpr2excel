@@ -124,6 +124,8 @@ def _ruler_debug(pdf: object, page_number: int) -> int:
     Nie wypisuje treści księgowej: dla kandydatów na ruler pokazuje wyłącznie
     znaki strukturalne (| oraz _), a cyfry zastępuje literą 'd'.
     """
+    from collections import Counter
+
     from kpir_converter.application.extraction import (
         _RULER_CELL_RE,
         _RULER_LINE_RE,
@@ -163,6 +165,27 @@ def _ruler_debug(pdf: object, page_number: int) -> int:
             print(f"    brakuje w rulerze: {[n for n in wanted if n not in found]}")
         layout = detect_column_layout(profile, tokens, content.vertical_lines)
         print(f"  wynik: source={layout.source} conf={layout.confidence}")
+
+    # Najdluzsze tokeny: ruler jest zwykle najdluzszym tokenem na stronie,
+    # niezaleznie od tego, z jakich glifow jest zbudowany.
+    print("\nNajdluzsze tokeny na stronie (rozklad znakow, bez tresci):")
+    longest = sorted(tokens, key=lambda t: len(t.raw_text), reverse=True)[:5]
+    for token in longest:
+        text = token.raw_text.strip()
+        counts = Counter(text)
+        digits = sum(v for k, v in counts.items() if k.isdigit())
+        letters = sum(v for k, v in counts.items() if k.isalpha())
+        structural = [
+            (repr(ch), n) for ch, n in counts.most_common() if not ch.isalnum() and not ch.isspace()
+        ]
+        print(
+            f"  dl={len(text):<5} x={token.bbox.x0:.4f}-{token.bbox.x1:.4f} y={token.baseline:.4f}"
+        )
+        print(f"    cyfr={digits} liter={letters} spacji={counts.get(' ', 0)}")
+        print(f"    znaki strukturalne (top 8): {structural[:8]}")
+        codepoints = sorted({f"U+{ord(ch):04X}" for ch, _n in counts.items() if not ch.isalnum()})
+        print(f"    kody znakow niealfanumerycznych: {codepoints[:12]}")
+        print(f"    regex_rulera={bool(_RULER_LINE_RE.match(text))}")
 
     print("\nKandydaci na wiersz numeracji (tylko struktura, cyfry jako 'd'):")
     shown = 0
