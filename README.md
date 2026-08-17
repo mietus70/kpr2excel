@@ -192,6 +192,17 @@ python scripts/diagnose.py --show-values       # dołącz wartości komórek
 
 Skrypt grupuje problemy według kodu, pokazuje najczęściej dotknięte kolumny
 i wypisuje przykładowe wiersze z tekstem surowym oraz wartością sparsowaną.
+
+Gdy problemy dotyczą tylko części stron, rozkład per strona pokaże:
+
+```bash
+python scripts/diagnose_pages.py              # wszystkie dokumenty
+python scripts/diagnose_pages.py --doc 1812   # fragment nazwy pliku
+```
+
+Raport zestawia liczbę problemów i rzeczywistą geometrię kolumn strona po
+stronie. Stała liczba problemów niezależna od rozmiaru dokumentu oznacza defekt
+lokalny (zwykle strony 1), rosnąca proporcjonalnie — defekt systemowy.
 Jeśli wartości trafiły do niewłaściwych kolumn (np. nazwa kontrahenta w kolumnie
 daty), oznacza to, że profil nie pasuje do wariantu formularza — patrz
 „Ograniczenia MVP".
@@ -207,11 +218,17 @@ python scripts/inspect_layout.py twoj-plik.pdf          # tryb bezpieczny
 python scripts/inspect_layout.py twoj-plik.pdf --show-text   # z treścią
 python scripts/inspect_layout.py twoj-plik.pdf --suggest-profile > profiles/moj.yaml
 python scripts/inspect_layout.py twoj-plik.pdf --compare-layout  # układ kolumn strona po stronie
+python scripts/inspect_layout.py --doc 1812 --ruler-debug        # czemu odrzucono wiersz numeracji
 ```
 
 Tryb domyślny wypisuje wyłącznie współrzędne, liczbę znaków i klasę tekstu
 (`int`, `data`, `kwota`, `tekst`), więc wynik można bezpiecznie załączyć
 w zgłoszeniu błędu. Kluczowa jest linia „→ sugeruje N kolumn".
+
+`--ruler-debug` wyjaśnia wybór detektora kolumn: ile komórek zwrócił wiersz
+numeracji, których numerów zabrakło i jakimi znakami jest narysowany. Wydruki
+używają różnych wypełniaczy — `|_1_|__2__|` albo `|--1--|---2---|` — a tego
+samego formularza mogą dotyczyć oba warianty.
 
 ## Usuwanie danych
 
