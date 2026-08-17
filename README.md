@@ -196,6 +196,21 @@ Jeśli wartości trafiły do niewłaściwych kolumn (np. nazwa kontrahenta w kol
 daty), oznacza to, że profil nie pasuje do wariantu formularza — patrz
 „Ograniczenia MVP".
 
+### Nowy wariant formularza
+
+Jeśli diagnostyka pokaże, że wartości trafiają do złych kolumn, dokument ma
+prawdopodobnie inny układ niż profil. Geometrię sprawdzisz bez ujawniania danych:
+
+```bash
+python scripts/inspect_layout.py twoj-plik.pdf          # tryb bezpieczny
+python scripts/inspect_layout.py twoj-plik.pdf --show-text   # z treścią
+python scripts/inspect_layout.py twoj-plik.pdf --suggest-profile > profiles/moj.yaml
+```
+
+Tryb domyślny wypisuje wyłącznie współrzędne, liczbę znaków i klasę tekstu
+(`int`, `data`, `kwota`, `tekst`), więc wynik można bezpiecznie załączyć
+w zgłoszeniu błędu. Kluczowa jest linia „→ sugeruje N kolumn".
+
 ## Usuwanie danych
 
 ```bash
