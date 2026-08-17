@@ -184,3 +184,11 @@ class TestEmptyMarkerGlyphs:
     def test_no_markers_configured_keeps_old_behaviour(self) -> None:
         with pytest.raises(ParseError):
             parse_money("˙")
+
+    @pytest.mark.parametrize("raw", ["|˙|", "| ˙ |", "_˙_", "|˙ ˙|"])
+    def test_table_border_around_marker_is_empty(self, raw: str) -> None:
+        """Wydruk 2018 często trzyma ramkę komórki w tym samym tokenie."""
+        assert parse_money(raw, empty_markers=self.MARKERS) is None
+
+    def test_table_border_around_amount_still_parses(self) -> None:
+        assert parse_money("|1820.00|", empty_markers=self.MARKERS).as_text() == "1820.00"

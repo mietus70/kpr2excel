@@ -206,10 +206,25 @@ export function ExportConfigurator({
                 <button type="button" onClick={selectNoDocuments}>
                   Odznacz wszystkie
                 </button>
+                {documents.some((d) => (d.issueCounts.critical ?? 0) > 0) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedDocumentIds(
+                        documents
+                          .filter((d) => (d.issueCounts.critical ?? 0) === 0)
+                          .map((d) => d.id),
+                      )
+                    }
+                  >
+                    Pomiń pliki z błędami krytycznymi
+                  </button>
+                )}
               </div>
               <ul className="column-list">
                 {documents.map((doc) => {
                   const checked = selectedDocumentIds.includes(doc.id);
+                  const critical = doc.issueCounts.critical ?? 0;
                   return (
                     <li key={doc.id}>
                       <input
@@ -221,6 +236,11 @@ export function ExportConfigurator({
                       <label htmlFor={`doc-${doc.id}`}>{doc.originalName}</label>
                       <span className="spacer" />
                       <span className="small muted mono">{doc.recordCount} wierszy</span>
+                      {critical > 0 && (
+                        <span className="status-chip critical" title="Blokuje eksport w trybie strict">
+                          {critical} krytyczne
+                        </span>
+                      )}
                     </li>
                   );
                 })}
@@ -232,6 +252,14 @@ export function ExportConfigurator({
               ? 'Zaznacz co najmniej jeden plik PDF.'
               : `Jeden plik Excel z ${selectedDocumentIds.length} PDF (${selectedRowTotal} wierszy przed filtrami).`}
           </p>
+          {documents.some(
+            (d) => selectedDocumentIds.includes(d.id) && (d.issueCounts.critical ?? 0) > 0,
+          ) && (
+            <p className="notice warn" style={{ marginTop: 8 }} role="status">
+              Zaznaczony plik ma błędy krytyczne. W trybie „strict” zablokuje cały wspólny
+              Excel. Odznacz go albo użyj „Pomiń pliki z błędami krytycznymi”.
+            </p>
+          )}
         </section>
 
         {/* -------------------------------------------------- 2. columns */}

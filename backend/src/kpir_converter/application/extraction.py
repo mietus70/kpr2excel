@@ -26,7 +26,14 @@ from ..domain.models import (
 )
 from ..domain.profiles import ColumnType, KpirProfile, ProfileColumn
 from ..domain.validation import IssueCode
-from ..domain.values import BBox, Confidence, ParseError, parse_business_date, parse_money
+from ..domain.values import (
+    BBox,
+    Confidence,
+    ParseError,
+    parse_business_date,
+    parse_money,
+    strip_table_drawing,
+)
 
 EXTRACTOR_VERSION = "1.0.0"
 
@@ -1089,7 +1096,7 @@ def _build_cell(
     period_year: int | None,
 ) -> tuple[Cell, bool, int]:
     raw_text, operations = assemble_text(tokens, profile)
-    normalized = raw_text.strip()
+    normalized = strip_table_drawing(raw_text.strip())
     empty_markers = profile.empty_markers
 
     parsed_text: str | None = None
@@ -1114,7 +1121,7 @@ def _build_cell(
                     parsed_text = date.as_text()
                     value_type = ValueType.DATE
             elif column.type == ColumnType.INTEGER:
-                candidate = normalized.rstrip(".)")
+                candidate = strip_table_drawing(normalized).rstrip(".)")
                 if candidate.isdigit():
                     parsed_text = str(int(candidate))
                     value_type = ValueType.INTEGER

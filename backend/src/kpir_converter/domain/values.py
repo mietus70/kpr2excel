@@ -27,6 +27,8 @@ __all__ = [
     "parse_money",
     "parse_business_date",
     "money_to_text",
+    "strip_table_drawing",
+    "is_empty_marker",
 ]
 
 
@@ -111,6 +113,19 @@ def _strip_spaces(text: str) -> str:
     return text
 
 
+_TABLE_EDGE_RE = re.compile(r"^[|\s_=]+|[|\s_=]+$")
+
+
+def strip_table_drawing(raw: str) -> str:
+    """Drop leading/trailing table-drawing characters (``|``, ``_``).
+
+    Character-drawn reports often keep the cell border in the same token as
+    the value (``|˙|``, ``|1|``, ``|1820.00|``). Those glyphs are not part of
+    the amount or the empty-field marker.
+    """
+    return _TABLE_EDGE_RE.sub("", str(raw))
+
+
 def is_empty_marker(raw: str, empty_markers: tuple[str, ...]) -> bool:
     """True when the text is only "empty field" glyphs.
 
@@ -123,7 +138,7 @@ def is_empty_marker(raw: str, empty_markers: tuple[str, ...]) -> bool:
     """
     if not empty_markers:
         return False
-    text = str(raw).strip()
+    text = strip_table_drawing(str(raw).strip())
     if not text:
         return False
     markers = set(empty_markers)
@@ -149,7 +164,7 @@ def parse_money(raw: str, *, empty_markers: tuple[str, ...] = ()) -> Money | Non
     # Check markers on the raw text: NFKC would decompose glyphs such as U+02D9.
     if is_empty_marker(raw, empty_markers):
         return None
-    text = unicodedata.normalize("NFKC", str(raw)).strip()
+    text = unicodedata.normalize("NFKC", strip_table_drawing(str(raw))).strip()
     if text == "" or text in empty_markers:
         return None
     for ch in _MINUS_CHARS:
@@ -264,10 +279,10 @@ def parse_business_date(
         return None
     if is_empty_marker(raw, empty_markers):
         return None
-    text = unicodedata.normalize("NFKC", str(raw)).strip()
+    text = unicodedata.normalize("NFKC", strip_table_drawing(str(raw))).strip()
     if text == "" or text in empty_markers:
         return None
-    
+
     # Try to extract date pattern from dirty text (e.g., "02.01.18 Alarmkomplex")
     # Look for DD.MM.RR or DD.MM.RRRR pattern at the start
     date_pattern = re.match(r'^(\d{1,2})[.\-/ ](\d{1,2})[.\-/ ](\d{2,4})', text)
