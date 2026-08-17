@@ -283,8 +283,16 @@ def detect_column_layout(
     return ColumnLayout(_template_boundaries(profile), 0.62, "profile_template", diagnostics)
 
 
-_RULER_CELL_RE = re.compile(r"^_*(\d{1,2})_*$")
-_RULER_LINE_RE = re.compile(r"^\|?_*\d{1,2}_*(\|_*\d{1,2}_*)+\|?$")
+# Wypełniacz wiersza numeracji kolumn zależy od wariantu wydruku:
+# "|_1_|__2__|" (podkreślenia) albo "|--1--|---2---|" (myślniki). Oba znaczą
+# to samo, więc obie postacie muszą być rozpoznawane. Znaki spoza tej klasy
+# celowo NIE są dopuszczane - inaczej zwykły tekst z cyframi mógłby zostać
+# wzięty za ruler.
+_RULER_FILL = r"[_\-\u2500\u2014\u2013]"
+_RULER_CELL_RE = re.compile(rf"^{_RULER_FILL}*(\d{{1,2}}){_RULER_FILL}*$")
+_RULER_LINE_RE = re.compile(
+    rf"^\|?{_RULER_FILL}*\d{{1,2}}{_RULER_FILL}*(\|{_RULER_FILL}*\d{{1,2}}{_RULER_FILL}*)+\|?$"
+)
 
 
 def _ruler_cells_from_tokens(

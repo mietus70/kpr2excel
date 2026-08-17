@@ -7,7 +7,10 @@ import datetime as _dt
 import pytest
 
 from kpir_converter.application.extraction import (
+    _RULER_CELL_RE,
+    _RULER_LINE_RE,
     _fill_missing_boundaries,
+    _ruler_cells_from_tokens,
     assemble_text,
     detect_column_layout,
     detect_table_zone,
@@ -435,3 +438,48 @@ class TestRulerWithMissingCells:
         nan = float("nan")
         filled = _fill_missing_boundaries([("a", 0.0, 0.1), ("b", nan, nan), ("c", 0.5, 0.6)])
         assert 0.1 <= filled[1][1] <= 0.5
+
+
+class TestRulerFillerVariants:
+    """Wiersz numeracji bywa rysowany myślnikami zamiast podkreśleń."""
+
+    @staticmethod
+    def _ruler(filler: str) -> str:
+        widths = [5, 9, 15, 24, 38, 40] + [9] * 10 + [12]
+        return "|" + "|".join(str(i + 1).center(w, filler) for i, w in enumerate(widths)) + "|"
+
+    def test_underscore_ruler_is_recognised(self) -> None:
+        assert _RULER_LINE_RE.match(self._ruler("_"))
+
+    def test_dash_ruler_is_recognised(self) -> None:
+        # Wariant wydruków 2018-2021: "|--1--|---2---|".
+        assert _RULER_LINE_RE.match(self._ruler("-"))
+
+    def test_decorative_dash_line_is_not_a_ruler(self) -> None:
+        # Ta sama długość co ruler, ale bez cyfr - to tylko ozdobnik.
+        assert not _RULER_LINE_RE.match("-" * 267)
+
+    def test_decorative_underscore_line_is_not_a_ruler(self) -> None:
+        assert not _RULER_LINE_RE.match("_" * 267)
+
+    @pytest.mark.parametrize(
+        "text",
+        ["faktura 12 z dnia 3", "1 234,56", "02.01.2018", "|wart.sprz.|", "pozostałe|"],
+    )
+    def test_ordinary_text_is_not_a_ruler(self, text: str) -> None:
+        assert not _RULER_LINE_RE.match(text)
+
+    def test_dash_cells_are_parsed(self) -> None:
+        assert _RULER_CELL_RE.match("--7--").group(1) == "7"
+        assert _RULER_CELL_RE.match("---17---").group(1) == "17"
+
+    def test_dash_ruler_yields_every_cell(self) -> None:
+        token = Token(
+            raw_text=self._ruler("-"),
+            bbox=BBox(0.0155, 0.140, 0.9841, 0.150),
+            baseline=0.1454,
+            page_number=1,
+        )
+        cells = _ruler_cells_from_tokens([token])
+        assert cells is not None
+        assert [number for number, _x0, _x1 in cells] == list(range(1, 18))
