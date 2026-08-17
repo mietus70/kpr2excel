@@ -17,7 +17,7 @@ import type {
 interface Props {
   profile: Profile;
   documents: KpirDocument[];
-  selectedDocumentIds: string[];
+  initialDocumentIds: string[];
   excludedRecordIds: string[];
   explicitRecordIds: string[];
   onClearRowSelection: () => void;
@@ -26,7 +26,7 @@ interface Props {
 export function ExportConfigurator({
   profile,
   documents,
-  selectedDocumentIds,
+  initialDocumentIds,
   excludedRecordIds,
   explicitRecordIds,
   onClearRowSelection,
@@ -36,6 +36,11 @@ export function ExportConfigurator({
     [profile],
   );
 
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>(() => {
+    const ready = new Set(documents.map((d) => d.id));
+    const initial = initialDocumentIds.filter((id) => ready.has(id));
+    return initial.length > 0 ? initial : documents.map((d) => d.id);
+  });
   const [columnKeys, setColumnKeys] = useState<string[]>(profile.defaultExportColumns);
   const [filterColumn, setFilterColumn] = useState(profile.defaultFilterColumn);
   const [minAmount, setMinAmount] = useState('');
@@ -86,11 +91,37 @@ export function ExportConfigurator({
     excludedRecordIds,
   ]);
 
+  // Keep selection in sync when documents appear or disappear after extraction.
+  useEffect(() => {
+    const readyIds = documents.map((d) => d.id);
+    const ready = new Set(readyIds);
+    setSelectedDocumentIds((current) => {
+      const kept = current.filter((id) => ready.has(id));
+      const added = readyIds.filter((id) => !current.includes(id));
+      if (current.length === 0) return readyIds;
+      if (added.length === 0 && kept.length === current.length) return current;
+      return [...kept, ...added];
+    });
+  }, [documents]);
+
   // Any configuration change invalidates the preview.
   useEffect(() => {
     setStale(true);
     setDownload(null);
   }, [definition]);
+
+  const toggleDocument = (id: string) => {
+    setSelectedDocumentIds((ids) =>
+      ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
+    );
+  };
+
+  const selectAllDocuments = () => setSelectedDocumentIds(documents.map((d) => d.id));
+  const selectNoDocuments = () => setSelectedDocumentIds([]);
+
+  const selectedRowTotal = documents
+    .filter((d) => selectedDocumentIds.includes(d.id))
+    .reduce((sum, d) => sum + d.recordCount, 0);
 
   const refreshPreview = useCallback(async () => {
     if (selectedDocumentIds.length === 0) {
@@ -165,20 +196,41 @@ export function ExportConfigurator({
         <section className="panel">
           <h3>1. Zakres źródłowy</h3>
           {documents.length === 0 ? (
-            <p className="muted small">Brak zaimportowanych dokumentów.</p>
+            <p className="muted small">Brak zaimportowanych dokumentów gotowych do eksportu.</p>
           ) : (
-            <ul className="column-list">
-              {documents.map((doc) => (
-                <li key={doc.id}>
-                  <span>{doc.originalName}</span>
-                  <span className="spacer" />
-                  <span className="small muted mono">{doc.recordCount} wierszy</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <div className="row" style={{ marginBottom: 8 }}>
+                <button type="button" onClick={selectAllDocuments}>
+                  Zaznacz wszystkie
+                </button>
+                <button type="button" onClick={selectNoDocuments}>
+                  Odznacz wszystkie
+                </button>
+              </div>
+              <ul className="column-list">
+                {documents.map((doc) => {
+                  const checked = selectedDocumentIds.includes(doc.id);
+                  return (
+                    <li key={doc.id}>
+                      <input
+                        type="checkbox"
+                        id={`doc-${doc.id}`}
+                        checked={checked}
+                        onChange={() => toggleDocument(doc.id)}
+                      />
+                      <label htmlFor={`doc-${doc.id}`}>{doc.originalName}</label>
+                      <span className="spacer" />
+                      <span className="small muted mono">{doc.recordCount} wierszy</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           )}
           <p className="small muted" style={{ marginBottom: 0 }}>
-            Eksport obejmie {selectedDocumentIds.length} zaznaczonych dokumentów.
+            {selectedDocumentIds.length === 0
+              ? 'Zaznacz co najmniej jeden plik PDF.'
+              : `Jeden plik Excel z ${selectedDocumentIds.length} PDF (${selectedRowTotal} wierszy przed filtrami).`}
           </p>
         </section>
 

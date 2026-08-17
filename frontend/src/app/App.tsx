@@ -363,7 +363,7 @@ export function App() {
           <ExportConfigurator
             profile={profile}
             documents={documents.filter((d) => d.status === 'ready')}
-            selectedDocumentIds={activeDocumentId ? [activeDocumentId] : []}
+            initialDocumentIds={documents.filter((d) => d.status === 'ready').map((d) => d.id)}
             excludedRecordIds={excludedRecordIds}
             explicitRecordIds={[]}
             onClearRowSelection={() => setExcludedRecordIds([])}

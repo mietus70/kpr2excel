@@ -281,6 +281,43 @@ class TestExportApi:
         assert response.status_code == 409
         assert response.json()["error"]["code"] == "STALE_PREVIEW"
 
+    def test_preview_and_export_merges_selected_documents(self, client, ctx, sample_pdf) -> None:
+        """Wybrane PDF-y trafiają do jednego XLSX (suma wierszy)."""
+        from kpir_converter.application.services import ExportService, ExtractionService
+
+        batch = client.post("/api/v1/batches", json={"displayName": "Wiele PDF"}).json()
+        payload = sample_pdf.read_bytes()
+        response = client.post(
+            f"/api/v1/batches/{batch['id']}/documents",
+            files=[
+                ("files", ("styczen.pdf", payload, "application/pdf")),
+                ("files", ("luty.pdf", payload, "application/pdf")),
+            ],
+        )
+        assert response.status_code == 201, response.text
+        docs = response.json()["documents"]
+        assert len(docs) == 2
+        ids = [d["id"] for d in docs]
+        for document_id in ids:
+            ExtractionService(ctx).run(document_id)
+
+        body = {
+            "scope": {"type": "documents", "documentIds": ids},
+            "columnKeys": ["business_date", "evidence_number", "total_expenses"],
+            "policy": "draft",
+        }
+        preview = client.post("/api/v1/export-previews", json=body).json()
+        assert preview["matchingRowCount"] == 10
+        assert preview["totalRowCount"] == 10
+
+        body["sourceRevision"] = preview["sourceRevision"]
+        created = client.post("/api/v1/exports", json=body)
+        assert created.status_code == 202, created.text
+        ExportService(ctx).build(created.json()["id"])
+        status = client.get(f"/api/v1/exports/{created.json()['id']}").json()
+        assert status["status"] == "ready"
+        assert status["rowCount"] == 10
+
     def test_full_export_flow(self, client, ctx, loaded) -> None:
         from kpir_converter.application.services import ExportService
 
