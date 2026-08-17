@@ -65,6 +65,67 @@ def render(text: str, show_text: bool, width: int = 22) -> str:
     return f"<{classify(text)}:{len(text)}>"
 
 
+def _compare_layout(pdf: object) -> int:
+    """Wypisuje wykryty układ kolumn dla każdej strony.
+
+    Pokazuje wyłącznie źródło detekcji, pewność i granice kolumn - żadnej
+    treści dokumentu. Różnica granic między stronami oznacza, że detektor
+    zachowuje się niestabilnie i to jest przyczyną przesunięcia kolumn.
+    """
+    from kpir_converter.application.extraction import (
+        assemble_text,
+        detect_column_layout,
+        match_profile,
+    )
+    from kpir_converter.config import get_settings
+    from kpir_converter.infrastructure.storage.profiles_loader import get_registry
+
+    settings = get_settings()
+    registry = get_registry(settings.resolved_profiles_dir())
+    profiles = list(registry.profiles.values())
+
+    texts = []
+    for page in range(1, min(pdf.page_count, 3) + 1):
+        content = pdf.page_content(page)
+        text, _ops = assemble_text(content.tokens, profiles[0])
+        texts.append(text)
+    match, _diag = match_profile(profiles, texts)
+    if match is None:
+        print("Nie dopasowano profilu.")
+        return 1
+    profile = match.profile
+    print(f"Profil: {profile.id}@{profile.version}  (score={match.score:.2f})")
+    print(f"Stron:  {pdf.page_count}\n")
+
+    first: list[tuple[str, float, float]] | None = None
+    for page in range(1, pdf.page_count + 1):
+        content = pdf.page_content(page)
+        geo = content
+        layout = detect_column_layout(profile, geo.tokens, geo.vertical_lines)
+        flag = ""
+        if first is None:
+            first = layout.boundaries
+        else:
+            diffs = [abs(a[1] - b[1]) for a, b in zip(first, layout.boundaries, strict=False)]
+            worst = max(diffs) if diffs else 0.0
+            flag = "  <-- IDENTYCZNY" if worst < 1e-6 else f"  <-- RÓŻNI SIĘ (max dx0={worst:.4f})"
+        print(
+            f"  strona {page:>3}: source={layout.source:<16} conf={layout.confidence:.2f}"
+            f" kolumn={len(layout.boundaries)}{flag}"
+        )
+
+    print("\nGranice pierwszych 4 kolumn na każdej stronie:")
+    for page in range(1, pdf.page_count + 1):
+        content = pdf.page_content(page)
+        geo = content
+        layout = detect_column_layout(profile, geo.tokens, geo.vertical_lines)
+        cells = " | ".join(
+            f"{key[:12]}: {x0:.4f}-{x1:.4f}" for key, x0, x1 in layout.boundaries[:4]
+        )
+        print(f"  s{page}: {cells}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Podgląd geometrii strony PDF.")
     parser.add_argument("pdf", type=Path, help="ścieżka do pliku PDF")
@@ -80,6 +141,11 @@ def main() -> int:
         action="store_true",
         help="wypisz szkic profilu YAML na podstawie wykrytych linii pionowych",
     )
+    parser.add_argument(
+        "--compare-layout",
+        action="store_true",
+        help="porównaj wykryty układ kolumn na wszystkich stronach (bez treści)",
+    )
     args = parser.parse_args()
 
     if not args.pdf.exists():
@@ -90,6 +156,9 @@ def main() -> int:
         if args.page < 1 or args.page > pdf.page_count:
             print(f"Strona {args.page} poza zakresem (1..{pdf.page_count})", file=sys.stderr)
             return 1
+
+        if args.compare_layout:
+            return _compare_layout(pdf)
 
         content = pdf.page_content(args.page)
         geometry = content.geometry
