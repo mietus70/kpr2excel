@@ -207,6 +207,23 @@ Jeśli wartości trafiły do niewłaściwych kolumn (np. nazwa kontrahenta w kol
 daty), oznacza to, że profil nie pasuje do wariantu formularza — patrz
 „Ograniczenia MVP".
 
+### Eksport mimo kilku wadliwych wierszy
+
+Polityka `strict` blokuje **cały** eksport, gdy choć jeden wybrany wiersz ma
+otwarty problem krytyczny — także wtedy, gdy jest to 1 wiersz na 400. Nie trzeba
+przez to rezygnować z reszty danych; są trzy wyjścia, wszystkie niedestrukcyjne:
+
+1. **Odznacz wadliwe wiersze** w konfiguratorze eksportu. Filtry i ręczny wybór
+   działają przed sprawdzeniem polityki, więc `strict` przestaje blokować, a
+   podgląd pokaże `blockingIssueCount: 0`.
+2. **Popraw wartość** w trybie pełnej kontroli. Korekta jest osobną warstwą —
+   oryginalny PDF pozostaje nietknięty.
+3. **Zmień politykę na `reviewed`**, gdy problemy są przejrzane i świadomie
+   zaakceptowane. Eksport obejmie wszystkie wiersze.
+
+Liczbę blokujących wierszy pokazuje `blockingIssueCount` w podglądzie eksportu,
+a `scripts/diagnose.py` wskaże, których kolumn dotyczą.
+
 ### Nowy wariant formularza
 
 Jeśli diagnostyka pokaże, że wartości trafiają do złych kolumn, dokument ma

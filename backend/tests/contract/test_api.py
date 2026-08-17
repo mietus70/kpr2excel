@@ -318,6 +318,64 @@ class TestExportApi:
         assert response.status_code == 409
         assert response.json()["error"]["code"] == "BLOCKING_ISSUES"
 
+    def test_excluding_bad_rows_unblocks_strict_export(self, client, ctx, loaded) -> None:
+        """Kilka wadliwych wierszy nie musi blokowac calego dokumentu.
+
+        Odpowiednik realnego przypadku: 413 rekordow, z czego 1 ma blad
+        krytyczny. Odznaczenie tego wiersza pozwala wyeksportowac reszte
+        bez zmiany polityki na luzniejsza.
+        """
+        from kpir_converter.application.services import ExportService
+
+        _batch_id, document_id = loaded
+        items = client.get(f"/api/v1/documents/{document_id}/records?limit=10").json()["items"]
+        bad = items[0]
+        cell = bad["cells"]["evidence_number"]
+        client.patch(
+            f"/api/v1/cells/{cell['id']}", json={"value": "", "baseRevision": cell["revision"]}
+        )
+
+        blocked = client.post(
+            "/api/v1/exports", json=self._definition(document_id, policy="strict")
+        )
+        assert blocked.status_code == 409
+
+        body = self._definition(document_id, policy="strict")
+        body["rowSelection"] = {"mode": "ALL_MATCHING", "excludedRecordIds": [bad["id"]]}
+        preview = client.post("/api/v1/export-previews", json=body).json()
+        assert preview["blockingIssueCount"] == 0
+        assert preview["matchingRowCount"] == len(items) - 1
+
+        body["sourceRevision"] = preview["sourceRevision"]
+        created = client.post("/api/v1/exports", json=body)
+        assert created.status_code == 202, created.text
+
+        ExportService(ctx).build(created.json()["id"])
+        status = client.get(f"/api/v1/exports/{created.json()['id']}").json()
+        assert status["status"] == "ready"
+        assert status["rowCount"] == len(items) - 1
+
+    def test_reviewed_policy_exports_despite_critical_issues(self, client, ctx, loaded) -> None:
+        """Polityka 'reviewed' pozwala wyeksportowac wszystko po przejrzeniu."""
+        from kpir_converter.application.services import ExportService
+
+        _batch_id, document_id = loaded
+        items = client.get(f"/api/v1/documents/{document_id}/records?limit=1").json()["items"]
+        cell = items[0]["cells"]["evidence_number"]
+        client.patch(
+            f"/api/v1/cells/{cell['id']}", json={"value": "", "baseRevision": cell["revision"]}
+        )
+
+        body = self._definition(document_id, policy="reviewed")
+        preview = client.post("/api/v1/export-previews", json=body).json()
+        assert preview["blockingIssueCount"] >= 1
+        body["sourceRevision"] = preview["sourceRevision"]
+
+        created = client.post("/api/v1/exports", json=body)
+        assert created.status_code == 202, created.text
+        ExportService(ctx).build(created.json()["id"])
+        assert client.get(f"/api/v1/exports/{created.json()['id']}").json()["status"] == "ready"
+
     def test_presets_round_trip(self, client, loaded) -> None:
         _batch_id, document_id = loaded
         created = client.post(
