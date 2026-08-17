@@ -205,6 +205,7 @@ prawdopodobnie inny układ niż profil. Geometrię sprawdzisz bez ujawniania dan
 python scripts/inspect_layout.py twoj-plik.pdf          # tryb bezpieczny
 python scripts/inspect_layout.py twoj-plik.pdf --show-text   # z treścią
 python scripts/inspect_layout.py twoj-plik.pdf --suggest-profile > profiles/moj.yaml
+python scripts/inspect_layout.py twoj-plik.pdf --compare-layout  # układ kolumn strona po stronie
 ```
 
 Tryb domyślny wypisuje wyłącznie współrzędne, liczbę znaków i klasę tekstu

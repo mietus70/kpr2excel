@@ -24,7 +24,12 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend" / "src"))
+
+from _venv import ensure_venv  # noqa: E402
+
+ensure_venv()
 
 from kpir_converter.application.extraction import (  # noqa: E402
     detect_column_layout,
