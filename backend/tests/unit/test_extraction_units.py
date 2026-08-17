@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as _dt
+from pathlib import Path
 
 import pytest
 
@@ -483,3 +484,81 @@ class TestRulerFillerVariants:
         cells = _ruler_cells_from_tokens([token])
         assert cells is not None
         assert [number for number, _x0, _x1 in cells] == list(range(1, 18))
+
+
+class TestLayoutCarriedAcrossPages:
+    """Ruler bywa drukowany tylko na stronie 1; kolejne strony dziedziczą układ."""
+
+    @staticmethod
+    def _tokens(with_ruler: bool) -> list[Token]:
+        widths = [5, 9, 15, 24, 38, 40] + [9] * 10 + [12]
+        ruler = "|" + "|".join(str(i + 1).center(w, "-") for i, w in enumerate(widths)) + "|"
+        tokens = []
+        if with_ruler:
+            tokens.append(
+                Token(
+                    raw_text=ruler,
+                    bbox=BBox(0.0155, 0.140, 0.9841, 0.150),
+                    baseline=0.1454,
+                    page_number=1,
+                )
+            )
+        for index in range(3):
+            y = 0.30 + index * 0.03
+            tokens.append(
+                Token(
+                    raw_text=str(index + 1),
+                    bbox=BBox(0.030, y, 0.034, y + 0.01),
+                    baseline=y,
+                    page_number=1,
+                )
+            )
+            tokens.append(
+                Token(
+                    raw_text="02.01.2018",
+                    bbox=BBox(0.052, y, 0.088, y + 0.01),
+                    baseline=y,
+                    page_number=1,
+                )
+            )
+        return tokens
+
+    def _profile(self):
+        from kpir_converter.infrastructure.storage.profiles_loader import load_registry
+
+        return load_registry(Path("profiles")).get("kpir_pl_system_firma@1")
+
+    def test_page_without_ruler_reuses_previous_layout(self) -> None:
+        profile = self._profile()
+        first = extract_page(profile, self._tokens(True), [], [], page_number=1)
+        assert first.layout.source == "number_ruler"
+
+        without = extract_page(profile, self._tokens(False), [], [], page_number=2)
+        assert without.layout.source != "number_ruler"
+
+        with_carry = extract_page(
+            profile,
+            self._tokens(False),
+            [],
+            [],
+            page_number=2,
+            fallback_layout=first.layout,
+        )
+        assert with_carry.layout.source == "number_ruler"
+        assert with_carry.layout.boundaries == first.layout.boundaries
+
+    def test_weaker_layout_never_overrides_a_stronger_one(self) -> None:
+        profile = self._profile()
+        strong = extract_page(profile, self._tokens(True), [], [], page_number=1)
+        weak = extract_page(profile, self._tokens(False), [], [], page_number=2)
+        # Przeniesienie działa tylko w stronę większej pewności.
+        result = extract_page(
+            profile,
+            self._tokens(True),
+            [],
+            [],
+            page_number=3,
+            fallback_layout=weak.layout,
+        )
+        assert result.layout.source == "number_ruler"
+        assert result.layout.boundaries == strong.layout.boundaries

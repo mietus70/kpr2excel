@@ -372,6 +372,8 @@ class ExtractionService:
             logical_index = 0
             cancelled = False
             all_records: list[KpirRecord] = []
+            # Najpewniejszy dotąd układ kolumn: ruler bywa tylko na stronie 1.
+            best_layout = None
             for number in range(1, page_count + 1):
                 if callable(should_cancel) and should_cancel():
                     cancelled = True
@@ -388,7 +390,10 @@ class ExtractionService:
                         profile_score=profile_score,
                         period_year=period_from.year if period_from else None,
                         start_logical_index=logical_index,
+                        fallback_layout=best_layout,
                     )
+                    if best_layout is None or result.layout.confidence > best_layout.confidence:
+                        best_layout = result.layout
                     page_issues = list(result.issues)
                     validation_issues = validate_records(
                         result.records,

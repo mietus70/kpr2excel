@@ -908,12 +908,28 @@ def extract_page(
     profile_score: float = 1.0,
     period_year: int | None = None,
     start_logical_index: int = 0,
+    fallback_layout: ColumnLayout | None = None,
 ) -> PageExtraction:
-    """Extract every record visible on a single page."""
+    """Extract every record visible on a single page.
+
+    ``fallback_layout`` pozwala przenieść pewny układ kolumn z wcześniejszej
+    strony. Wiersz numeracji kolumn bywa drukowany tylko na pierwszej stronie
+    dokumentu, a kolejne strony mają tę samą siatkę - bez tego spadałyby na
+    słabszy detektor i dawały inne granice kolumn niż strona 1.
+    """
     issues: list[Issue] = []
     diagnostics: list[str] = []
 
     layout = detect_column_layout(profile, tokens, vertical_lines)
+    if (
+        fallback_layout is not None
+        and fallback_layout.confidence > layout.confidence
+        and len(fallback_layout.boundaries) == len(layout.boundaries)
+    ):
+        diagnostics.append(
+            f"reused the column layout from an earlier page ({fallback_layout.source})"
+        )
+        layout = fallback_layout
     diagnostics.extend(layout.diagnostics)
     if layout.confidence < 0.7:
         issues.append(
