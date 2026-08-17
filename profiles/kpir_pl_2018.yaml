@@ -1,0 +1,252 @@
+# Profil układu KPiR (wzór obowiązujący od 2018 r.).
+#
+# Współrzędne x0/x1 są znormalizowane do 0..1 względem szerokości strony po
+# uwzględnieniu rotacji. Są punktem startowym dla detektora kolumn: właściwe
+# granice wyznaczane są z linii wektorowych i kotwic nagłówka, a te wartości
+# służą jako wzorzec relatywny i fallback.
+#
+# UWAGA: profil jest deklaratywny. Nie wykonuje kodu i jest walidowany schematem
+# przy starcie aplikacji (domain/profiles.py).
+
+id: kpir_pl_2018
+version: 1
+display_name: "KPiR (wzór od 2018 r.)"
+
+header_phrases:
+  - "PODATKOWA KSIĘGA PRZYCHODÓW I ROZCHODÓW"
+  - "KSIĘGA PRZYCHODÓW I ROZCHODÓW"
+  - "Nr dowodu"
+  - "Opis zdarzenia gospodarczego"
+  - "Kontrahent"
+  - "Przychód"
+  - "Wydatki"
+  - "Razem przychód"
+  - "Razem wydatki"
+  - "Lp."
+
+min_match_score: 0.55
+match_margin: 0.08
+
+header_zone_max_y: 0.28
+footer_zone_min_y: 0.94
+
+# Znaki używane przez programy księgowe jako "pole puste".
+empty_markers: ["-", "--", "---", "–", "—", "·", ".", "x", "X", "brak"]
+
+date_formats: ["DD.MM.YYYY", "DD.MM.YY", "YYYY-MM-DD"]
+
+row_number_column: row_number
+date_column: business_date
+default_filter_column: total_expenses
+
+sheet_name: "KPiR"
+issues_sheet_name: "Problemy"
+
+columns:
+  - key: row_number
+    form_number: "1"
+    label_pl: "Lp."
+    type: integer
+    x0: 0.000
+    x1: 0.042
+    required: true
+    header_keywords: ["Lp", "Lp."]
+    xlsx_width: 6
+    align: right
+
+  - key: business_date
+    form_number: "2"
+    label_pl: "Data zdarzenia gospodarczego"
+    type: date
+    x0: 0.042
+    x1: 0.105
+    required: true
+    header_keywords: ["Data", "zdarzenia"]
+    xlsx_format: "yyyy-mm-dd"
+    xlsx_width: 13
+    align: center
+
+  - key: evidence_number
+    form_number: "3"
+    label_pl: "Nr dowodu księgowego"
+    type: text
+    x0: 0.105
+    x1: 0.185
+    required: true
+    header_keywords: ["Nr dowodu", "dowodu"]
+    xlsx_width: 20
+
+  - key: contractor_name
+    form_number: "4"
+    label_pl: "Kontrahent - imię i nazwisko (firma)"
+    type: text
+    x0: 0.185
+    x1: 0.290
+    header_keywords: ["Kontrahent", "imię", "firma"]
+    xlsx_width: 28
+
+  - key: contractor_address
+    form_number: "5"
+    label_pl: "Kontrahent - adres"
+    type: text
+    x0: 0.290
+    x1: 0.380
+    header_keywords: ["adres"]
+    xlsx_width: 28
+
+  - key: event_description
+    form_number: "6"
+    label_pl: "Opis zdarzenia gospodarczego"
+    type: text
+    x0: 0.380
+    x1: 0.480
+    header_keywords: ["Opis", "zdarzenia", "gospodarczego"]
+    xlsx_width: 34
+
+  - key: income_goods_services
+    form_number: "7"
+    label_pl: "Sprzedaż towarów i usług"
+    type: money
+    x0: 0.480
+    x1: 0.540
+    header_keywords: ["Sprzedaż", "towarów"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: other_income
+    form_number: "8"
+    label_pl: "Pozostałe przychody"
+    type: money
+    x0: 0.540
+    x1: 0.596
+    header_keywords: ["Pozostałe", "przychody"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: total_income
+    form_number: "9"
+    label_pl: "Razem przychód"
+    type: money
+    x0: 0.596
+    x1: 0.652
+    header_keywords: ["Razem", "przychód"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: goods_materials_purchase
+    form_number: "10"
+    label_pl: "Zakup towarów handlowych i materiałów"
+    type: money
+    x0: 0.652
+    x1: 0.708
+    header_keywords: ["Zakup", "towarów", "materiałów"]
+    xlsx_format: "0.00"
+    xlsx_width: 15
+    align: right
+
+  - key: purchase_incidental_costs
+    form_number: "11"
+    label_pl: "Koszty uboczne zakupu"
+    type: money
+    x0: 0.708
+    x1: 0.760
+    header_keywords: ["Koszty", "uboczne"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: remuneration
+    form_number: "12"
+    label_pl: "Wynagrodzenia w gotówce i w naturze"
+    type: money
+    x0: 0.760
+    x1: 0.812
+    header_keywords: ["Wynagrodzenia"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: other_expenses
+    form_number: "13"
+    label_pl: "Pozostałe wydatki"
+    type: money
+    x0: 0.812
+    x1: 0.864
+    header_keywords: ["Pozostałe", "wydatki"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: total_expenses
+    form_number: "14"
+    label_pl: "Razem wydatki"
+    type: money
+    x0: 0.864
+    x1: 0.916
+    header_keywords: ["Razem", "wydatki"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: research_development_costs
+    form_number: "15"
+    label_pl: "Koszty działalności badawczo-rozwojowej"
+    type: money
+    x0: 0.916
+    x1: 0.960
+    header_keywords: ["badawczo", "rozwojowej"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: notes
+    form_number: "16"
+    label_pl: "Uwagi"
+    type: text
+    x0: 0.960
+    x1: 1.000
+    header_keywords: ["Uwagi"]
+    xlsx_width: 18
+
+# Reguły sum służą WYŁĄCZNIE do walidacji. Wartość źródłowa nigdy nie jest
+# podmieniana wartością wyliczoną - rozbieżność tworzy problem do kontroli.
+sum_rules:
+  - code: INCOME_TOTAL_MISMATCH
+    target: total_income
+    components: [income_goods_services, other_income]
+    tolerance: "0.00"
+    severity: warning
+  - code: EXPENSE_TOTAL_MISMATCH
+    target: total_expenses
+    components: [goods_materials_purchase, purchase_incidental_costs, remuneration, other_expenses]
+    tolerance: "0.00"
+    severity: warning
+
+confidence:
+  review_below: 0.85
+  critical_below: 0.60
+  weights:
+    profile_match: 0.20
+    column_boundary: 0.25
+    row_segmentation: 0.20
+    type_parse: 0.25
+    transformations: 0.10
+
+text_assembly:
+  join_lines_with: " "
+  dehyphenate: true
+  repair_letter_spacing: true
+  letter_spacing_max_gap: 0.004
+  collapse_whitespace: true
+
+default_export_columns:
+  - row_number
+  - business_date
+  - evidence_number
+  - contractor_name
+  - event_description
+  - total_income
+  - total_expenses

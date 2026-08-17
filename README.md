@@ -1,1 +1,165 @@
-# kpr2excel
+# kpr2excel — lokalny konwerter KPiR (PDF → XLSX)
+
+Aplikacja webowa działająca **w całości lokalnie i offline**, która wydobywa zapisy
+z tekstowych PDF-ów podatkowej księgi przychodów i rozchodów, pozwala je
+skontrolować obok oryginalnej strony dokumentu i wyeksportować do znormalizowanego
+pliku XLSX.
+
+Dokumenty projektowe: [`AGENTS.md`](./AGENTS.md) i [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+
+## Najważniejsze cechy
+
+- **Bez internetu.** Żaden komponent nie wykonuje żądań na zewnątrz, nie pobiera
+  modeli i nie wysyła telemetrii. Backend nasłuchuje domyślnie na `127.0.0.1`.
+- **Kwoty jako `Decimal`.** Nigdzie nie używamy `float`; w bazie kwoty są
+  kanonicznym tekstem dziesiętnym, w JSON stringami, a w XLSX liczbami z formatem `0.00`.
+- **Pełna śledzalność.** Każda wartość zna swój dokument, stronę, prostokąt
+  źródłowy, tekst surowy, pewność i historię ręcznych zmian.
+- **Oryginał jest niezmienny.** Korekty żyją w osobnej warstwie i można je cofnąć.
+- **Bez cichego poprawiania danych.** Rozbieżność sumy tworzy problem do kontroli,
+  a nie podmianę wartości źródłowej.
+- **Konfigurowalny eksport.** Wybór i kolejność kolumn, ręczny wybór/wykluczenie
+  wierszy, filtr kwotowy „od/do” oraz podgląd liczby wynikowych wierszy.
+
+## Wymagania
+
+| Składnik | Wersja |
+|---|---|
+| Python | 3.11 lub nowszy |
+| Node.js | 18 lub nowszy |
+
+## Instalacja (jednorazowo, wymaga internetu)
+
+Pobranie zależności to osobny etap konfiguracji, nie działanie aplikacji.
+
+```bash
+python -m venv .venv
+# Linux/macOS
+source .venv/bin/activate
+# Windows
+.venv\Scripts\activate
+
+pip install -e ".[dev]"
+cd frontend && npm install && cd ..
+```
+
+## Uruchomienie
+
+```bash
+python scripts/dev.py
+```
+
+Skrypt sprawdza wersje i zależności, uruchamia migracje, startuje API, workera
+i Vite, czeka na gotowość i otwiera przeglądarkę. Zatrzymanie: `Ctrl+C`.
+
+Przydatne przełączniki:
+
+```bash
+python scripts/dev.py --no-browser        # nie otwieraj przeglądarki
+python scripts/dev.py --api-port 9000     # inny port API
+python scripts/dev.py --no-worker         # tylko API i UI
+```
+
+## Konfiguracja
+
+Ustawienia pochodzą ze zmiennych środowiskowych (opcjonalnie z pliku `.env`):
+
+| Zmienna | Domyślnie | Znaczenie |
+|---|---|---|
+| `KPIR_DATA_DIR` | katalog danych użytkownika | miejsce na PDF-y, bazę i eksporty |
+| `KPIR_API_PORT` | `8756` | port API |
+| `KPIR_FRONTEND_PORT` | `5173` | port interfejsu |
+| `KPIR_MAX_UPLOAD_MB` | `200` | limit rozmiaru pliku |
+| `KPIR_MAX_PAGES_PER_DOCUMENT` | `5000` | limit stron dokumentu |
+| `KPIR_WORKER_CONCURRENCY` | `1` | liczba równoległych dokumentów |
+| `KPIR_LOG_LEVEL` | `INFO` | poziom logowania |
+
+Dane **nie trafiają do repozytorium** — domyślnie lądują w katalogu danych systemu
+(np. `~/.local/share/kpir-converter`, `%LOCALAPPDATA%\kpir-converter`).
+
+## Jak się tego używa
+
+1. **Import** — przeciągnij jeden lub wiele PDF-ów. Import tylko zapisuje pliki
+   i tworzy zadania; ekstrakcję wykonuje worker, więc można zamknąć kartę.
+2. **Kontrola** — po lewej strona PDF z podświetlonym źródłem aktywnej komórki,
+   po prawej tabela. Kliknięcie komórki pokazuje jej źródło, `Enter` rozpoczyna
+   edycję, `Esc` anuluje. Oznaczenia: `M` — wartość poprawiona ręcznie,
+   `!` — do sprawdzenia, `!!` — pewność krytyczna, *(puste)* — brak wartości.
+3. **Eksport** — konfigurator w czterech krokach: zakres, kolumny (wybór
+   i kolejność), wiersze i filtry, podsumowanie. Podgląd pokazuje liczbę wierszy,
+   które trafią do pliku, oraz ile odpadło i z jakiego powodu.
+
+### Semantyka filtra kwotowego
+
+- granice `od`/`do` są **włączne** (`value >= min`, `value <= max`);
+- można podać tylko jedną granicę;
+- filtry działają na **wartościach efektywnych**, czyli uwzględniają korekty;
+- wiersz z pustą lub niepoprawną kwotą **nie spełnia** aktywnego filtra, a podgląd
+  pokazuje liczbę takich odrzuceń osobno;
+- kolumna filtrowana **nie musi** być eksportowana — można filtrować po
+  „Wydatki razem”, a pominąć tę kolumnę w pliku;
+- `min > max` blokuje eksport z czytelnym błędem.
+
+### Polityki eksportu
+
+| Polityka | Zachowanie |
+|---|---|
+| `strict` | blokuje eksport, gdy wybrane wiersze mają otwarte problemy krytyczne |
+| `reviewed` | pozwala eksportować po świadomym potwierdzeniu problemów |
+| `draft` | eksport roboczy; dodaje arkusz „Metadane” z wersjami i konfiguracją |
+
+## Testy
+
+```bash
+python scripts/test.py          # pełna bramka jakości
+python -m pytest backend/tests -q
+```
+
+Zestawy: `unit` (kwoty, daty, geometria, reguły eksportu), `golden` (oczekiwane
+komórki i prostokąty na reprezentatywnych stronach), `integration`
+(PDF → baza → skonfigurowany XLSX) oraz `contract` (kształt API, CSRF, Host,
+polityki eksportu). Testy są deterministyczne i nie korzystają z sieci.
+
+Golden fixtures są generowane syntetycznie i **nie zawierają danych osobowych**.
+Nie aktualizuj ich automatycznie bez obejrzenia różnicy — regresja jakości
+ekstrakcji jest błędem nawet wtedy, gdy testy techniczne przechodzą.
+
+## Usuwanie danych
+
+```bash
+python scripts/clean_local_data.py
+```
+
+Usunięcie dokumentu w UI kasuje oryginał, wyrenderowane strony, dane pośrednie,
+korekty i powiązane eksporty.
+
+## Bezpieczeństwo
+
+- weryfikacja sygnatury `%PDF-`, limity rozmiaru i liczby stron;
+- pliki zapisywane pod wewnętrznym UUID, nazwa użytkownika tylko jako metadana;
+- ścisła lista dozwolonych `Host`/`Origin`, token CSRF dla operacji zmieniających dane;
+- CSP bez połączeń zewnętrznych (`default-src 'self'; connect-src 'self'`);
+- ochrona przed formułami w XLSX (`=`, `+`, `-`, `@`);
+- logi zawierają kody i identyfikatory, nigdy treści księgowej ani pełnych ścieżek.
+
+## Struktura projektu
+
+```text
+backend/src/kpir_converter/
+├── domain/           # encje, typy wartości, profile, walidacja, logika eksportu
+├── application/      # pipeline ekstrakcji i przypadki użycia
+├── infrastructure/   # SQLite, PyMuPDF, pliki, OpenPyXL
+├── api/              # FastAPI: DTO, routery, bezpieczeństwo
+└── worker/           # kolejka, leasing zadań, postęp, anulowanie
+frontend/src/         # React + TypeScript (import, kontrola, eksport)
+profiles/             # wersjonowane profile układu KPiR (YAML)
+docs/adr/             # decyzje architektoniczne
+```
+
+## Ograniczenia MVP
+
+- brak OCR — PDF bez warstwy tekstowej otrzymuje problem `OCR_REQUIRED`;
+- jeden profil układu (`kpir_pl_2018@1`); geometrię kolumn należy zweryfikować
+  na rzeczywistych, zanonimizowanych dokumentach z docelowego programu księgowego;
+- jedna lokalna instancja i jeden użytkownik;
+- brak instalatora desktopowego.

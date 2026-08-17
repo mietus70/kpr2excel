@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Local app data (never commit accounting data)
+data/
+.devdata/
+.pytest-data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
