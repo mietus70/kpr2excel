@@ -118,6 +118,74 @@ def _find_stored_pdf(fragment: str, *, quiet: bool = False) -> Path | None:
     return path
 
 
+def _ruler_debug(pdf: object, page_number: int) -> int:
+    """Wyjaśnia krok po kroku, czemu detektor number_ruler zadziałał lub nie.
+
+    Nie wypisuje treści księgowej: dla kandydatów na ruler pokazuje wyłącznie
+    znaki strukturalne (| oraz _), a cyfry zastępuje literą 'd'.
+    """
+    from kpir_converter.application.extraction import (
+        _RULER_CELL_RE,
+        _RULER_LINE_RE,
+        _boundaries_from_number_ruler,
+        _ruler_cells_from_tokens,
+        detect_column_layout,
+    )
+    from kpir_converter.config import get_settings
+    from kpir_converter.domain.geometry import cluster_values
+    from kpir_converter.infrastructure.storage.profiles_loader import get_registry
+
+    registry = get_registry(get_settings().resolved_profiles_dir())
+    profiles = list(registry.profiles.values())
+    content = pdf.page_content(page_number)
+    tokens = content.tokens
+
+    print(f"Strona: {page_number}   tokenów: {len(tokens)}")
+    for profile in profiles:
+        expected = len(profile.columns)
+        clusters = cluster_values(content.vertical_lines, tolerance=0.006)
+        print(f"\n--- profil {profile.id}@{profile.version} (kolumn: {expected}) ---")
+        print(f"  linie pionowe: {len(clusters)} klastrów, próg has_vector_lines: >= {expected}")
+        print(f"  ruler brany pod uwagę: {'TAK' if len(clusters) < expected else 'NIE'}")
+
+        cells = _ruler_cells_from_tokens(tokens)
+        print(f"  _ruler_cells_from_tokens: {len(cells) if cells else 'None'}")
+        if cells:
+            print(f"    numery cel: {[n for n, _x0, _x1 in cells]}")
+        boundaries = _boundaries_from_number_ruler(profile, tokens)
+        print(f"  _boundaries_from_number_ruler: {'OK' if boundaries else 'None'}")
+        if cells and not boundaries:
+            found = {n for n, _x0, _x1 in cells}
+            wanted = sorted(
+                {int(c.form_number) for c in profile.columns if (c.form_number or "").isdigit()}
+            )
+            print(f"    numery w profilu: {wanted}")
+            print(f"    brakuje w rulerze: {[n for n in wanted if n not in found]}")
+        layout = detect_column_layout(profile, tokens, content.vertical_lines)
+        print(f"  wynik: source={layout.source} conf={layout.confidence}")
+
+    print("\nKandydaci na wiersz numeracji (tylko struktura, cyfry jako 'd'):")
+    shown = 0
+    for token in tokens:
+        text = token.raw_text.strip()
+        if len(text) < 10 or ("|" not in text and "_" not in text):
+            continue
+        masked = "".join("d" if ch.isdigit() else ch for ch in text)
+        clipped = masked if len(masked) <= 120 else masked[:117] + "..."
+        print(
+            f"  dł={len(text):<4} x={token.bbox.x0:.4f}-{token.bbox.x1:.4f} y={token.baseline:.4f}"
+        )
+        print(f"    regex_calej_linii={bool(_RULER_LINE_RE.match(text))}  {clipped}")
+        segments = [seg for seg in text.split("|") if _RULER_CELL_RE.match(seg)]
+        print(f"    segmentów pasujacych do komorki: {len(segments)}")
+        shown += 1
+        if shown >= 5:
+            break
+    if shown == 0:
+        print("  brak tokenów zawierających | lub _")
+    return 0
+
+
 def _compare_layout(pdf: object) -> int:
     """Wypisuje wykryty układ kolumn dla każdej strony.
 
@@ -205,6 +273,11 @@ def main() -> int:
         help="wypisz szkic profilu YAML na podstawie wykrytych linii pionowych",
     )
     parser.add_argument(
+        "--ruler-debug",
+        action="store_true",
+        help="wyjaśnij, dlaczego wiersz numeracji kolumn został lub nie został użyty",
+    )
+    parser.add_argument(
         "--compare-layout",
         action="store_true",
         help="porównaj wykryty układ kolumn na wszystkich stronach (bez treści)",
@@ -231,6 +304,9 @@ def main() -> int:
         if args.page < 1 or args.page > pdf.page_count:
             print(f"Strona {args.page} poza zakresem (1..{pdf.page_count})", file=sys.stderr)
             return 1
+
+        if args.ruler_debug:
+            return _ruler_debug(pdf, args.page)
 
         if args.compare_layout:
             return _compare_layout(pdf)
