@@ -1,0 +1,280 @@
+# Profil układu KPiR generowanego przez program "SYSTEM FIRMA".
+#
+# Wariant znakowy (monospace): tabela rysowana znakami `|` i `_`, bez linii
+# wektorowych. Nagłówek dokumentu brzmi "KSIĄŻKA PRZYCHODÓW I ROZCHODÓW"
+# (nie "PODATKOWA KSIĘGA..."), a puste pole oznacza glif `˙` (U+02D9).
+#
+# Formularz ma 17 numerowanych kolumn zgodnych z rozporządzeniem, przy czym
+# kolumna 16 (koszty B+R) jest fizycznie podzielona na dwie podkolumny:
+# "opis" i "wartość". Dlatego kolumn fizycznych jest 18.
+#
+# Współrzędne wyliczono z wiersza numeracji kolumn:
+#   |_1_|____2___|_______3_______|...|________17_______|
+# Są wzorcem relatywnym — rzeczywiste granice wyznaczają kotwice nagłówka.
+
+id: kpir_pl_system_firma
+version: 1
+display_name: "KPiR — SYSTEM FIRMA (wariant znakowy, 17 kolumn)"
+
+header_phrases:
+  - "KSIĄŻKA PRZYCHODÓW I ROZCHODÓW"
+  - "PODATKOWA KSIĘGA PRZYCHODÓW I ROZCHODÓW"
+  - "KONTRAHENT"
+  - "Nr dowodu"
+  - "księgowego"
+  - "Opis zdarzenia gospodarczego"
+  - "imię i nazwisko"
+  - "Przychód"
+  - "WYDATKI"
+  - "wart.sprz."
+  - "Suma folio"
+  - "Przeniesienie z folio"
+
+min_match_score: 0.55
+match_margin: 0.08
+
+# Nagłówek jest wysoki (5 wierszy opisu + wiersz numerów), stopka zawiera
+# sumy folio. Właściwe granice i tak wykrywa detektor stref.
+header_zone_max_y: 0.30
+footer_zone_min_y: 0.88
+
+# KLUCZOWE: ten raport oznacza pustą komórkę glifem `˙` (U+02D9, dot above).
+# Bez tego każda pusta kwota byłaby błędem parsowania.
+empty_markers: ["˙", "·", "-", "--", "---", "–", "—", ".", "x", "X"]
+
+# Daty drukowane są dwucyfrowo (02.01.23); rok bierze się z okresu dokumentu.
+date_formats: ["DD.MM.YY", "DD.MM.YYYY", "YYYY-MM-DD"]
+
+row_number_column: row_number
+date_column: business_date
+default_filter_column: total_expenses
+
+sheet_name: "KPiR"
+issues_sheet_name: "Problemy"
+
+columns:
+  - key: row_number
+    form_number: "1"
+    label_pl: "Lp."
+    type: integer
+    x0: 0.0000
+    x1: 0.0169
+    required: true
+    header_keywords: ["L", "P"]
+    xlsx_width: 6
+    align: right
+
+  - key: business_date
+    form_number: "2"
+    label_pl: "Data zdarzenia gospodarczego"
+    type: date
+    x0: 0.0169
+    x1: 0.0506
+    required: true
+    header_keywords: ["Data", "zdarze"]
+    xlsx_format: "yyyy-mm-dd"
+    xlsx_width: 13
+    align: center
+
+  - key: evidence_number
+    form_number: "3"
+    label_pl: "Nr dowodu księgowego"
+    type: text
+    x0: 0.0506
+    x1: 0.1105
+    required: true
+    header_keywords: ["Nr dowodu", "księgowego"]
+    xlsx_width: 20
+
+  - key: contractor_name
+    form_number: "4"
+    label_pl: "Kontrahent — imię i nazwisko (firma)"
+    type: text
+    x0: 0.1105
+    x1: 0.2041
+    header_keywords: ["imię i nazwisko", "firma"]
+    xlsx_width: 28
+
+  - key: contractor_address
+    form_number: "5"
+    label_pl: "Kontrahent — adres"
+    type: text
+    x0: 0.2041
+    x1: 0.3502
+    header_keywords: ["adres"]
+    xlsx_width: 30
+
+  - key: event_description
+    form_number: "6"
+    label_pl: "Opis zdarzenia gospodarczego"
+    type: text
+    x0: 0.3502
+    x1: 0.5037
+    header_keywords: ["Opis zdarzenia"]
+    xlsx_width: 34
+
+  - key: income_goods_services
+    form_number: "7"
+    label_pl: "Przychód — wartość sprzedanych towarów i usług"
+    type: money
+    x0: 0.5037
+    x1: 0.5449
+    header_keywords: ["wart.sprz.", "towarów"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: other_income
+    form_number: "8"
+    label_pl: "Pozostałe przychody"
+    type: money
+    x0: 0.5449
+    x1: 0.5861
+    header_keywords: ["pozostałe", "przychody"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: total_income
+    form_number: "9"
+    label_pl: "Razem przychód (7+8)"
+    type: money
+    x0: 0.5861
+    x1: 0.6273
+    header_keywords: ["razem", "przychód"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: goods_materials_purchase
+    form_number: "10"
+    label_pl: "Zakup towarów handlowych i materiałów wg cen zakupu"
+    type: money
+    x0: 0.6273
+    x1: 0.6685
+    header_keywords: ["handlowych", "cen zakupu"]
+    xlsx_format: "0.00"
+    xlsx_width: 15
+    align: right
+
+  - key: purchase_incidental_costs
+    form_number: "11"
+    label_pl: "Koszty uboczne zakupu"
+    type: money
+    x0: 0.6685
+    x1: 0.7097
+    header_keywords: ["uboczne"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: remuneration
+    form_number: "12"
+    label_pl: "Wynagrodzenia w gotówce i w naturze"
+    type: money
+    x0: 0.7097
+    x1: 0.7509
+    header_keywords: ["wynagrodz.", "naturze"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: other_expenses
+    form_number: "13"
+    label_pl: "Pozostałe wydatki"
+    type: money
+    x0: 0.7509
+    x1: 0.7921
+    header_keywords: ["pozostałe", "wydatki"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: total_expenses
+    form_number: "14"
+    label_pl: "Razem wydatki (12+13)"
+    type: money
+    x0: 0.7921
+    x1: 0.8333
+    header_keywords: ["razem", "wydatki"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: free_column
+    form_number: "15"
+    label_pl: "Kolumna wolna"
+    type: text
+    x0: 0.8333
+    x1: 0.8745
+    xlsx_width: 14
+
+  # Kolumna 16 formularza ma dwie podkolumny: opis i wartość kosztu.
+  - key: research_development_description
+    form_number: "16"
+    label_pl: "Koszty B+R — opis kosztu"
+    type: text
+    x0: 0.8745
+    x1: 0.8989
+    header_keywords: ["opis"]
+    xlsx_width: 24
+
+  - key: research_development_costs
+    form_number: "16"
+    label_pl: "Koszty B+R — wartość"
+    type: money
+    x0: 0.8989
+    x1: 0.9307
+    header_keywords: ["wartość", "kosztu"]
+    xlsx_format: "0.00"
+    xlsx_width: 14
+    align: right
+
+  - key: notes
+    form_number: "17"
+    label_pl: "Uwagi"
+    type: text
+    x0: 0.9307
+    x1: 1.0000
+    header_keywords: ["Uwagi"]
+    xlsx_width: 22
+
+# Reguły sum przepisane wprost z nagłówka formularza: "(7+8)" oraz "(12+13)".
+# Kolumny 10 i 11 NIE wchodzą do kolumny 14 — to osobne pozycje kosztowe.
+sum_rules:
+  - code: INCOME_TOTAL_MISMATCH
+    target: total_income
+    components: [income_goods_services, other_income]
+    tolerance: "0.00"
+    severity: warning
+  - code: EXPENSE_TOTAL_MISMATCH
+    target: total_expenses
+    components: [remuneration, other_expenses]
+    tolerance: "0.00"
+    severity: warning
+
+confidence:
+  review_below: 0.85
+  critical_below: 0.60
+  weights:
+    profile_match: 0.20
+    column_boundary: 0.25
+    row_segmentation: 0.20
+    type_parse: 0.25
+    transformations: 0.10
+
+text_assembly:
+  join_lines_with: " "
+  dehyphenate: true
+  repair_letter_spacing: true
+  letter_spacing_max_gap: 0.004
+  collapse_whitespace: true
+
+default_export_columns:
+  - row_number
+  - business_date
+  - evidence_number
+  - contractor_name
+  - event_description
+  - total_income
+  - total_expenses

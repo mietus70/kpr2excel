@@ -29,9 +29,9 @@ _COLUMNS: tuple[tuple[str, str, float], ...] = (
     ("row_number", "1", 0.030),
     ("business_date", "2", 0.055),
     ("evidence_number", "3", 0.070),
-    ("contractor_name", "4", 0.095),
-    ("contractor_address", "5", 0.085),
-    ("event_description", "6", 0.100),
+    ("contractor_name", "4", 0.088),
+    ("contractor_address", "5", 0.078),
+    ("event_description", "6", 0.094),
     ("income_goods_services", "7", 0.062),
     ("other_income", "8", 0.058),
     ("total_income", "9", 0.058),
@@ -40,8 +40,9 @@ _COLUMNS: tuple[tuple[str, str, float], ...] = (
     ("remuneration", "12", 0.054),
     ("other_expenses", "13", 0.054),
     ("total_expenses", "14", 0.054),
-    ("research_development_costs", "15", 0.045),
-    ("notes", "16", 0.038),
+    ("free_column", "15", 0.042),
+    ("research_development_costs", "16", 0.045),
+    ("notes", "17", 0.038),
 )
 
 _HEADER_LABELS = {
@@ -59,6 +60,7 @@ _HEADER_LABELS = {
     "remuneration": "Wynagrodzenia",
     "other_expenses": "Pozostale wydatki",
     "total_expenses": "Razem wydatki",
+    "free_column": "wolna",
     "research_development_costs": "badawczo-rozwojowej",
     "notes": "Uwagi",
 }
@@ -193,6 +195,7 @@ def expected_records(rows: list[SyntheticRow] | None = None) -> list[dict[str, s
                 "remuneration": _dec(row.remuneration),
                 "other_expenses": _dec(row.other_expenses),
                 "total_expenses": _dec(row.total_expenses),
+                "free_column": None,
                 "research_development_costs": _dec(row.research_development_costs),
                 "notes": row.notes or None,
             }
@@ -359,6 +362,7 @@ def _draw_rows(
             "remuneration": _pl_money(row.remuneration),
             "other_expenses": _pl_money(row.other_expenses),
             "total_expenses": _pl_money(row.total_expenses),
+            "free_column": "-",
             "research_development_costs": _pl_money(row.research_development_costs),
             "notes": row.notes or "-",
         }

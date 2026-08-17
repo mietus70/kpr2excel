@@ -300,7 +300,12 @@ class TestProfileSchema:
 
     def test_real_profile_is_consistent(self, profile) -> None:
         assert profile.qualified_id == "kpir_pl_2018@1"
-        assert len(profile.columns) == 16
+        # Wzór KPiR ma 17 kolumn: 15 jest "wolna", 16 to koszty B+R, 17 to uwagi.
+        assert len(profile.columns) == 17
+        assert [c.form_number for c in profile.columns] == [str(n) for n in range(1, 18)]
+        assert profile.column("free_column").form_number == "15"
+        assert profile.column("research_development_costs").form_number == "16"
+        assert profile.column("notes").form_number == "17"
         assert profile.column("total_expenses").is_money
         assert profile.default_filter_column == "total_expenses"
         assert set(profile.export_columns_default()) <= set(profile.column_keys)

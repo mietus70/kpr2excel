@@ -171,6 +171,20 @@ def detect_column_layout(
     diagnostics: list[str] = []
     expected = len(profile.columns)
 
+    # Some accounting programs draw the table with characters instead of vector
+    # graphics (monospace reports). Then the printed column-number row
+    # "|_1_|__2__|...|_17_|" is the most reliable boundary source available.
+    #
+    # Vector rule lines still win when present: they mark the true cell edges,
+    # while the ruler only approximates them from character positions. The ruler
+    # is therefore consulted first only when there are no usable vertical lines.
+    has_vector_lines = len(cluster_values(vertical_lines, tolerance=0.006)) >= expected
+    if not has_vector_lines:
+        char_ruler = _boundaries_from_number_ruler(profile, tokens)
+        if char_ruler is not None:
+            diagnostics.append("granice z wiersza numeracji kolumn")
+            return ColumnLayout(char_ruler, 0.94, "number_ruler", diagnostics)
+
     clusters = [sum(c) / len(c) for c in cluster_values(vertical_lines, tolerance=0.006)]
     clusters = [x for x in clusters if 0.0 <= x <= 1.0]
     ordered_columns = sorted(profile.columns, key=lambda c: c.x0)
@@ -267,6 +281,131 @@ def detect_column_layout(
 
     diagnostics.append("falling back to the raw profile template")
     return ColumnLayout(_template_boundaries(profile), 0.62, "profile_template", diagnostics)
+
+
+_RULER_CELL_RE = re.compile(r"^_*(\d{1,2})_*$")
+_RULER_LINE_RE = re.compile(r"^\|?_*\d{1,2}_*(\|_*\d{1,2}_*)+\|?$")
+
+
+def _ruler_cells_from_tokens(
+    tokens: Sequence[Token],
+) -> list[tuple[int, float, float]] | None:
+    """Locate the printed column-number row and return each cell's extent.
+
+    Two renderings occur in the wild:
+
+    * separate tokens per cell (``|_1_|`` ``|__2__|`` ...), and
+    * one single token holding the whole ruler, because it contains no spaces.
+
+    The second case needs character-level interpolation inside the token: the
+    font is monospace here, so a character index maps linearly onto the token's
+    horizontal extent.
+    """
+    # --- case 1: the whole ruler arrived as one token -------------------------
+    for token in tokens:
+        text = token.raw_text.strip()
+        if len(text) < 10 or not _RULER_LINE_RE.match(text):
+            continue
+        width = token.bbox.x1 - token.bbox.x0
+        if width <= 0:
+            continue
+        step = width / len(text)
+        cells: list[tuple[int, float, float]] = []
+        start = 0
+        for index, char in enumerate(text + "|"):
+            if char != "|":
+                continue
+            segment = text[start:index]
+            match = _RULER_CELL_RE.match(segment)
+            if match:
+                cells.append(
+                    (
+                        int(match.group(1)),
+                        token.bbox.x0 + start * step,
+                        token.bbox.x0 + index * step,
+                    )
+                )
+            start = index + 1
+        if len(cells) >= 5:
+            return cells
+
+    # --- case 2: one token per ruler cell ------------------------------------
+    candidates: list[tuple[int, float, float, float]] = []
+    for token in tokens:
+        match = _RULER_CELL_RE.match(token.raw_text.strip())
+        if match:
+            candidates.append((int(match.group(1)), token.bbox.x0, token.bbox.x1, token.baseline))
+    if len(candidates) < 5:
+        return None
+    by_line: dict[float, list[tuple[int, float, float, float]]] = {}
+    for item in candidates:
+        by_line.setdefault(round(item[3], 3), []).append(item)
+    ruler = max(by_line.values(), key=len)
+    if len(ruler) < 5:
+        return None
+    ruler.sort(key=lambda item: item[1])
+    return [(number, x0, x1) for number, x0, x1, _baseline in ruler]
+
+
+def _boundaries_from_number_ruler(
+    profile: KpirProfile, tokens: Sequence[Token]
+) -> list[tuple[str, float, float]] | None:
+    """Read column boundaries from a printed column-number row.
+
+    Character-drawn reports render a ruler such as ``|_1_|____2___|...|__17__|``.
+    Each cell carries both its form number and its exact horizontal extent, which
+    is far more precise than guessing from text positions. Cells are matched to
+    profile columns by ``form_number``; a column split into sub-columns (e.g. the
+    B+R "opis"/"wartość" pair) shares one ruler cell, which is divided
+    proportionally to the template.
+    """
+    numbers = [c.form_number for c in profile.columns if c.form_number]
+    if len(numbers) < 5:
+        return None
+
+    ruler = _ruler_cells_from_tokens(tokens)
+    if ruler is None or len(ruler) < max(5, int(0.6 * len(set(numbers)))):
+        return None
+
+    # The numbers must run 1, 2, 3, ... for this to be a column ruler.
+    if [item[0] for item in ruler] != list(range(1, len(ruler) + 1)):
+        return None
+
+    extent = {number: (x0, x1) for number, x0, x1 in ruler}
+    ordered = sorted(profile.columns, key=lambda c: c.x0)
+    boundaries: list[tuple[str, float, float]] = []
+
+    for column in ordered:
+        try:
+            form_number = int(column.form_number) if column.form_number else None
+        except ValueError:
+            form_number = None
+        if form_number is None or form_number not in extent:
+            return None
+        siblings = [c for c in ordered if c.form_number == column.form_number]
+        x0, x1 = extent[form_number]
+        if len(siblings) == 1:
+            boundaries.append((column.key, x0, x1))
+            continue
+        # Shared ruler cell: split it proportionally to the template widths.
+        span_start = min(c.x0 for c in siblings)
+        span_total = max(c.x1 for c in siblings) - span_start or 1.0
+        width = x1 - x0
+        boundaries.append(
+            (
+                column.key,
+                x0 + (column.x0 - span_start) / span_total * width,
+                x0 + (column.x1 - span_start) / span_total * width,
+            )
+        )
+
+    # Close the gaps between ruler cells so no token falls between columns.
+    closed: list[tuple[str, float, float]] = []
+    for index, (key, x0, x1) in enumerate(boundaries):
+        left = 0.0 if index == 0 else (boundaries[index - 1][2] + x0) / 2
+        right = 1.0 if index == len(boundaries) - 1 else (x1 + boundaries[index + 1][1]) / 2
+        closed.append((key, _clamp(left), _clamp(right)))
+    return _repair_monotonic(closed)
 
 
 def _scale_template(
@@ -423,6 +562,10 @@ def detect_table_zone(
         for line in lines:
             if line.top > 0.5:
                 break
+            if _looks_like_data_row(line):
+                # A line that opens with an ordinal number followed by a date is
+                # a record, however many header-ish words it happens to contain.
+                break
             normalized = _normalize_for_match(line.text)
             if not normalized:
                 continue
@@ -433,9 +576,9 @@ def detect_table_zone(
     if header_bottom == 0.0:
         header_bottom = profile.header_zone_max_y
 
-    # Footer: only trailing lines inside the bottom band of the page qualify.
-    # Restricting the search prevents an evidence number such as "ZK/2018/5"
-    # from being mistaken for a "page 1/2" marker and swallowing real records.
+    # Footer, part 1: trailing lines inside the bottom band of the page.
+    # Restricting the page-marker search prevents an evidence number such as
+    # "ZK/2018/5" from being mistaken for a "page 1/2" marker.
     for line in reversed(lines):
         if line.top <= max(header_bottom, _FOOTER_SEARCH_FROM):
             break
@@ -444,22 +587,58 @@ def detect_table_zone(
         else:
             break
 
+    # Footer, part 2: an explicit summary row ("Suma folio", "Przeniesienie
+    # z folio", "Razem") ends the data no matter where it sits. On the last,
+    # partially filled page it appears well above the bottom band, and anything
+    # below it — including the totals themselves — must not become a record.
+    for line in lines:
+        if line.baseline <= header_bottom:
+            continue
+        stripped = line.text.strip().lstrip("|_=*-—– \t")
+        if _SUM_MARKER_RE.match(stripped):
+            footer_top = min(footer_top, line.top)
+            break
+
     return header_bottom, footer_top
+
+
+def _looks_like_data_row(line: TextLine) -> bool:
+    """True when the line starts with an ordinal number followed by a date.
+
+    That pairing is the signature of a KPiR record and never occurs in a header,
+    so it is a safe guard against classifying the first record as header text.
+    """
+    texts = [t.raw_text.strip() for t in line.tokens[:4] if t.raw_text.strip()]
+    if len(texts) < 2:
+        return False
+    return bool(_INT_RE.match(texts[0]) and _DATE_TOKEN_RE.match(texts[1]))
 
 
 _FOOTER_SEARCH_FROM = 0.85
 _PAGE_MARKER_RE = re.compile(r"(?i)(\b(strona|str\.?|page)\b|^\s*\d{1,4}\s*/\s*\d{1,4}\s*$)")
+# Summary rows are anchored to the start of the line so that an ordinary
+# description containing the word "razem" does not disqualify a real record.
+# Leading table-drawing characters ("| Suma folio |") are stripped first.
 _SUM_MARKER_RE = re.compile(
-    r"(?i)^\s*(suma|razem|przeniesienie|z przeniesienia|podsumowanie|do przeniesienia)\b"
+    r"(?i)^(suma|razem|przeniesienie|z przeniesienia|do przeniesienia|podsumowanie"
+    r"|suma folio|suma strony|ogolem|ogółem)\b"
 )
+_PRINT_MARKER_RE = re.compile(r"(?i)\b(wydruk|sporz[aą]dzono programem|koniec wydruku)\b")
+_DECORATION_RE = re.compile(r"^[\s|_=*\-—–+.]+$")
 
 
 def _looks_like_footer(text: str) -> bool:
     if not text:
         return True
+    if _DECORATION_RE.match(text):
+        # A pure separator line ("____" / "====") carries no data.
+        return True
+    stripped = text.lstrip("|_=*-—– \t")
     if _PAGE_MARKER_RE.search(text):
         return True
-    return bool(_SUM_MARKER_RE.search(text))
+    if _PRINT_MARKER_RE.search(text):
+        return True
+    return bool(_SUM_MARKER_RE.match(stripped))
 
 
 def segment_rows(
@@ -478,6 +657,9 @@ def segment_rows(
         footer_top = detected_footer if footer_top is None else footer_top
 
     body = [line for line in lines if line.baseline > header_bottom and line.top < footer_top]
+    # Character-drawn reports separate sections with rules made of "___" or "===".
+    # They carry no data and would otherwise be appended to the preceding record.
+    body = [line for line in body if not _DECORATION_RE.match(line.text.strip())]
     if not body:
         return []
 

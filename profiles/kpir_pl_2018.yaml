@@ -191,22 +191,31 @@ columns:
     xlsx_width: 14
     align: right
 
-  - key: research_development_costs
+  # Wzór KPiR ma 17 kolumn: 15 jest "wolna", 16 to koszty B+R, 17 to uwagi.
+  - key: free_column
     form_number: "15"
+    label_pl: "Kolumna wolna"
+    type: text
+    x0: 0.916
+    x1: 0.940
+    xlsx_width: 14
+
+  - key: research_development_costs
+    form_number: "16"
     label_pl: "Koszty działalności badawczo-rozwojowej"
     type: money
-    x0: 0.916
-    x1: 0.960
+    x0: 0.940
+    x1: 0.972
     header_keywords: ["badawczo", "rozwojowej"]
     xlsx_format: "0.00"
     xlsx_width: 14
     align: right
 
   - key: notes
-    form_number: "16"
+    form_number: "17"
     label_pl: "Uwagi"
     type: text
-    x0: 0.960
+    x0: 0.972
     x1: 1.000
     header_keywords: ["Uwagi"]
     xlsx_width: 18
@@ -219,9 +228,12 @@ sum_rules:
     components: [income_goods_services, other_income]
     tolerance: "0.00"
     severity: warning
+  # Wzór KPiR: kolumna 14 to "razem wydatki (12+13)". Kolumny 10 i 11
+  # (zakup towarów, koszty uboczne) są odrębnymi pozycjami i NIE wchodzą
+  # do kolumny 14 - wliczanie ich dawało fałszywe EXPENSE_TOTAL_MISMATCH.
   - code: EXPENSE_TOTAL_MISMATCH
     target: total_expenses
-    components: [goods_materials_purchase, purchase_incidental_costs, remuneration, other_expenses]
+    components: [remuneration, other_expenses]
     tolerance: "0.00"
     severity: warning
 
