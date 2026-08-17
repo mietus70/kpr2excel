@@ -111,15 +111,19 @@ def check_node() -> str | None:
 
 def check_python_deps() -> bool:
     missing = []
-    for module in ("fastapi", "uvicorn", "fitz", "openpyxl", "pydantic", "yaml"):
+    for module in ("fastapi", "uvicorn", "fitz", "openpyxl", "pydantic", "yaml", "multipart"):
         try:
             __import__(module)
         except ImportError:
-            missing.append({"fitz": "pymupdf", "yaml": "pyyaml"}.get(module, module))
+            missing.append(
+                {"fitz": "pymupdf", "yaml": "pyyaml", "multipart": "python-multipart"}.get(
+                    module, module
+                )
+            )
     if missing:
         fail("brakuje zależności Pythona: " + ", ".join(missing))
-        info("zainstaluj je świadomie, np.:")
-        info(f"  {sys.executable} -m pip install -e '.[dev]'")
+        info("zainstaluj je świadomie:")
+        info(f"  {sys.executable} scripts/install_deps.py --dev")
         return False
     ok("zależności Pythona obecne")
     return True

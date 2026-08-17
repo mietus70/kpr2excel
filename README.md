@@ -31,16 +31,41 @@ Dokumenty projektowe: [`AGENTS.md`](./AGENTS.md) i [`ARCHITECTURE.md`](./ARCHITE
 ## Instalacja (jednorazowo, wymaga internetu)
 
 Pobranie zależności to osobny etap konfiguracji, nie działanie aplikacji.
+Sama aplikacja po instalacji nie łączy się z siecią.
+
+Najprościej skryptem, który tworzy środowisko wirtualne i instaluje
+FastAPI, Uvicorn, PyMuPDF, OpenPyXL, Pydantic, PyYAML i python-multipart:
 
 ```bash
-python -m venv .venv
+python scripts/install_deps.py --create-venv --dev
+
 # Linux/macOS
 source .venv/bin/activate
 # Windows
 .venv\Scripts\activate
 
-pip install -e ".[dev]"
 cd frontend && npm install && cd ..
+```
+
+Skrypt czyta listę pakietów z `pyproject.toml`, pokazuje plan i pyta
+o potwierdzenie, a na końcu weryfikuje instalację realnym importem.
+
+| Polecenie | Działanie |
+|---|---|
+| `python scripts/install_deps.py --check --dev` | tylko sprawdź stan, nic nie instaluj |
+| `python scripts/install_deps.py --create-venv --dev` | utwórz `.venv` i zainstaluj tam |
+| `python scripts/install_deps.py --yes` | zainstaluj bez pytania (aktywne środowisko) |
+
+Alternatywnie klasycznie: `pip install -e ".[dev]"`.
+
+### Instalacja offline
+
+Na maszynie z internetem przygotuj paczkę kół, a następnie przenieś ją
+na maszynę docelową (`AGENTS.md` §11):
+
+```bash
+python scripts/install_deps.py --build-wheelhouse ./wheels          # z internetem
+python scripts/install_deps.py --wheelhouse ./wheels --offline --yes # bez internetu
 ```
 
 ## Uruchomienie
