@@ -15,6 +15,7 @@ Przykłady:
     python scripts/install_deps.py --dev           # razem z narzędziami testowymi
     python scripts/install_deps.py --create-venv   # utwórz .venv i zainstaluj tam
     python scripts/install_deps.py --check         # tylko sprawdź, nic nie instaluj
+    python scripts/install_deps.py --how-to-activate  # jak wejść do .venv
     python scripts/install_deps.py --wheelhouse ./wheels --offline   # instalacja offline
     python scripts/install_deps.py --build-wheelhouse ./wheels       # przygotuj paczkę offline
 """
@@ -272,6 +273,89 @@ def verify(specs: list[str], python: Path | str) -> bool:
 
 
 # --------------------------------------------------------------------------------------
+# Instrukcja wejścia do środowiska wirtualnego
+# --------------------------------------------------------------------------------------
+
+
+def activation_command(venv: Path) -> str:
+    """Polecenie aktywacji dopasowane do systemu i powłoki."""
+    if os.name == "nt":
+        # PowerShell jest domyślną powłoką w Windows Terminal, cmd.exe bywa nadal używany.
+        return f"{venv.name}\\Scripts\\Activate.ps1"
+    shell = Path(os.environ.get("SHELL", "")).name
+    if shell == "fish":
+        return f"source {venv.name}/bin/activate.fish"
+    if shell in ("csh", "tcsh"):
+        return f"source {venv.name}/bin/activate.csh"
+    return f"source {venv.name}/bin/activate"
+
+
+def print_activation_help(venv: Path = VENV_DIR) -> None:
+    """Wypisuje, jak wejść do środowiska wirtualnego i jak to sprawdzić."""
+    python = venv_python(venv)
+    relative = python.relative_to(REPO) if python.is_relative_to(REPO) else python
+
+    print()
+    print(f"{Colors.BOLD}Jak wejść do środowiska wirtualnego{Colors.END}")
+    print(f"  katalog środowiska: {venv}")
+
+    print()
+    print("  1. Przejdź do katalogu projektu:")
+    print(f"     {Colors.BOLD}cd {REPO}{Colors.END}")
+
+    print()
+    print("  2. Aktywuj środowisko:")
+    if os.name == "nt":
+        print(
+            f"     {Colors.BOLD}{venv.name}\\Scripts\\activate{Colors.END}"
+            f"        {Colors.DIM}# cmd.exe{Colors.END}"
+        )
+        print(
+            f"     {Colors.BOLD}{venv.name}\\Scripts\\Activate.ps1{Colors.END}"
+            f"    {Colors.DIM}# PowerShell{Colors.END}"
+        )
+    else:
+        print(f"     {Colors.BOLD}{activation_command(venv)}{Colors.END}")
+        shell = Path(os.environ.get("SHELL", "")).name
+        if shell not in ("fish", "csh", "tcsh"):
+            print(f"     {Colors.DIM}# fish:      source {venv.name}/bin/activate.fish{Colors.END}")
+            print(f"     {Colors.DIM}# csh/tcsh:  source {venv.name}/bin/activate.csh{Colors.END}")
+
+    print()
+    print(f"  W wierszu poleceń pojawi się prefiks {Colors.BOLD}({venv.name}){Colors.END}.")
+
+    print()
+    print("  3. Sprawdź, czy trafiłeś we właściwy interpreter:")
+    print(
+        f"     {Colors.BOLD}{'where python' if os.name == 'nt' else 'which python'}{Colors.END}"
+        f"   {Colors.DIM}# powinno wskazać {relative}{Colors.END}"
+    )
+    print(
+        f"     {Colors.BOLD}python -V{Colors.END}"
+        f"      {Colors.DIM}# Python {'.'.join(str(v) for v in MIN_PYTHON)}+{Colors.END}"
+    )
+
+    print()
+    print(f"  Wyjście ze środowiska: {Colors.BOLD}deactivate{Colors.END}")
+
+    print()
+    print(f"{Colors.BOLD}Bez aktywacji{Colors.END}")
+    print("  Aktywacja nie jest konieczna — interpreter można wołać wprost.")
+    print("  Działa tak samo i nie zmienia stanu powłoki:")
+    print(f"     {Colors.BOLD}{relative} scripts/dev.py{Colors.END}")
+    print(f"     {Colors.BOLD}{relative} -m pytest backend/tests -q{Colors.END}")
+
+    if os.name == "nt":
+        print()
+        print(f"{Colors.BOLD}Gdy PowerShell zablokuje skrypt{Colors.END}")
+        print("  Komunikat o polityce wykonywania omija się w bieżącej sesji:")
+        print(
+            f"     {Colors.BOLD}Set-ExecutionPolicy -Scope Process "
+            f"-ExecutionPolicy Bypass{Colors.END}"
+        )
+
+
+# --------------------------------------------------------------------------------------
 
 
 def main() -> int:
@@ -293,6 +377,11 @@ def main() -> int:
         "--offline", action="store_true", help="nie korzystaj z sieci (wymaga --wheelhouse)"
     )
     parser.add_argument(
+        "--how-to-activate",
+        action="store_true",
+        help="pokaż, jak wejść do środowiska wirtualnego, i zakończ",
+    )
+    parser.add_argument(
         "--build-wheelhouse",
         type=Path,
         default=None,
@@ -300,6 +389,15 @@ def main() -> int:
         help="pobierz koła do katalogu i zakończ (przygotowanie instalacji offline)",
     )
     args = parser.parse_args()
+
+    # Sama instrukcja aktywacji nie wymaga niczego sprawdzać ani instalować.
+    if args.how_to_activate:
+        if not VENV_DIR.exists():
+            warn(f"nie znaleziono środowiska wirtualnego: {VENV_DIR}")
+            info("utwórz je razem z zależnościami:")
+            info("  python scripts/install_deps.py --create-venv --dev")
+        print_activation_help()
+        return 0
 
     print()
     print(f"{Colors.BOLD}Konwerter KPiR — instalacja zależności{Colors.END}")
@@ -408,11 +506,25 @@ def main() -> int:
 
     print()
     ok("gotowe")
+
     if args.create_venv:
-        activate = ".venv\\Scripts\\activate" if os.name == "nt" else "source .venv/bin/activate"
-        info(f"aktywuj środowisko:  {activate}")
-    info("następny krok (frontend):  cd frontend && npm install")
-    info("uruchomienie:              python scripts/dev.py")
+        # Świeże środowisko: pokaż pełną instrukcję wejścia. Dopóki użytkownik go
+        # nie aktywuje, "python" wskazuje jeszcze stary interpreter, więc kolejne
+        # kroki podajemy ze ścieżką do interpretera z venv.
+        print_activation_help(VENV_DIR)
+        prefix = f"{venv_python(VENV_DIR).relative_to(REPO)} "
+    else:
+        prefix = "python "
+
+    print()
+    print(f"{Colors.BOLD}Następne kroki{Colors.END}")
+    print(
+        f"  1. Zależności frontendu:  {Colors.BOLD}cd frontend && npm install && cd ..{Colors.END}"
+    )
+    print(f"  2. Uruchomienie:          {Colors.BOLD}{prefix}scripts/dev.py{Colors.END}")
+    if not args.create_venv and VENV_DIR.exists() and not in_virtualenv():
+        print()
+        info("przypomnienie aktywacji:  python scripts/install_deps.py --how-to-activate")
     return 0
 
 

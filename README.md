@@ -55,8 +55,39 @@ o potwierdzenie, a na końcu weryfikuje instalację realnym importem.
 | `python scripts/install_deps.py --check --dev` | tylko sprawdź stan, nic nie instaluj |
 | `python scripts/install_deps.py --create-venv --dev` | utwórz `.venv` i zainstaluj tam |
 | `python scripts/install_deps.py --yes` | zainstaluj bez pytania (aktywne środowisko) |
+| `python scripts/install_deps.py --how-to-activate` | przypomnij, jak wejść do `.venv` |
 
 Alternatywnie klasycznie: `pip install -e ".[dev]"`.
+
+### Wejście do środowiska wirtualnego
+
+```bash
+cd kpr2excel
+source .venv/bin/activate       # Linux/macOS (bash, zsh)
+.venv\Scripts\activate          # Windows (cmd.exe)
+.venv\Scripts\Activate.ps1      # Windows (PowerShell)
+```
+
+Po aktywacji w wierszu poleceń pojawia się prefiks `(.venv)`. Sprawdzenie
+interpretera: `which python` (Windows: `where python`) i `python -V`.
+Wyjście: `deactivate`.
+
+Aktywacja nie jest konieczna — interpreter można wołać wprost, co nie zmienia
+stanu powłoki:
+
+```bash
+.venv/bin/python scripts/dev.py
+.venv/bin/python -m pytest backend/tests -q
+```
+
+Gdy PowerShell zablokuje skrypt aktywacyjny komunikatem o polityce wykonywania,
+wystarczy jednorazowo w bieżącej sesji:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+Pełną instrukcję wypisze też `python scripts/install_deps.py --how-to-activate`.
 
 ### Instalacja offline
 
