@@ -248,3 +248,58 @@ class TestBaseProfileUnaffected:
         profile = registry.get("kpir_pl_2018")
         layout = detect_column_layout(profile, content.tokens, content.vertical_lines)
         assert layout.source == "vector_lines"
+
+
+class TestFullHeader:
+    """Regresja: 5-wierszowy nagłówek z wierszem jednostek "zl.gr".
+
+    W realnym dokumencie ostatnie linie nagłówka trafiały do danych jako
+    rekord #0 (opis o długości 272 znaków), bo detektor kończył strefę
+    nagłówka zbyt wcześnie. Wiersz numeracji |_1_|...| jest pewną granicą.
+    """
+
+    def test_header_lines_do_not_become_records(self, tmp_path: Path, registry) -> None:
+        pdf = build_character_kpir(tmp_path / "full.pdf", full_header=True)
+        _match, records, _issues = extract(pdf, registry)
+        assert len(records) == len(DEFAULT_CHARACTER_ROWS)
+        for record in records:
+            joined = " ".join((c.parsed_value_text or "") for c in record.cells.values())
+            assert "zl.gr" not in joined
+            assert "darczego" not in joined
+            assert "badawczo" not in joined.lower()
+
+    def test_first_record_is_real_data(self, tmp_path: Path, registry) -> None:
+        pdf = build_character_kpir(tmp_path / "full2.pdf", full_header=True)
+        _match, records, _issues = extract(pdf, registry)
+        assert records[0].cell("row_number").parsed_value_text == "1"
+        assert records[0].cell("business_date").parsed_value_text == "2023-01-02"
+
+    def test_no_issues_with_full_header(self, tmp_path: Path, registry) -> None:
+        pdf = build_character_kpir(tmp_path / "full3.pdf", full_header=True)
+        _match, _records, issues = extract(pdf, registry)
+        assert sorted({i.code for i in issues}) == []
+
+    def test_ruler_ends_the_header_zone(self, tmp_path: Path, char_profile) -> None:
+        pdf = build_character_kpir(tmp_path / "full4.pdf", full_header=True)
+        with PdfDocumentAdapter(pdf) as adapter:
+            content = adapter.page_content(1)
+        lines = group_tokens_into_lines(content.tokens)
+        header_bottom, _footer_top = detect_table_zone(char_profile, lines)
+        ruler = next(ln for ln in lines if ln.text.strip().startswith("|_1_|"))
+        assert header_bottom >= ruler.bottom - 1e-9
+
+
+class TestEmptyGlyphCells:
+    """Regresja: glif ``˙`` musi dawać pustkę, nie INVALID_MONEY."""
+
+    def test_empty_money_cells_are_empty(self, char_pdf, registry) -> None:
+        _match, records, issues = extract(char_pdf, registry)
+        assert "INVALID_MONEY" not in {i.code for i in issues}
+        empty = [
+            c
+            for r in records
+            for c in r.cells.values()
+            if c.column_key.startswith(("income", "other_", "goods_", "purchase_")) and c.is_empty
+        ]
+        assert empty, "oczekiwano pustych kolumn kwotowych"
+        assert all(c.parsed_value_text is None for c in empty)

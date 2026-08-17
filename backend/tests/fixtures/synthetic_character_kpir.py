@@ -180,6 +180,7 @@ def build_character_kpir(
     rows_per_page: int = 4,
     with_summary: bool = True,
     period: str = "01.01.2023 do 30.04.2023",
+    full_header: bool = False,
 ) -> Path:
     """Zapisuje syntetyczny raport KPiR w wariancie znakowym."""
     rows = rows if rows is not None else DEFAULT_CHARACTER_ROWS
@@ -207,6 +208,11 @@ def build_character_kpir(
 
         put(0, 26, f"(M) KSIAZKA PRZYCHODOW I ROZCHODOW - Firma Testowa za okres od {period}")
         put(0, 38, f"strona {index + 1}")
+        if full_header:
+            # Pełny, 5-wierszowy nagłówek z separatorem "_ _ _ _", tak jak
+            # w rzeczywistym wydruku. Ostatnia linia przed wierszem numeracji
+            # zawiera jednostki "zl.gr" - łatwo ją pomylić z danymi.
+            put(0, 44, "_ " * 130)
         put(0, 54, "| | Data | | | | Przychod |Zakup tow.| Koszty | W Y D A T K I (K O S Z T Y)")
         put(
             0,
@@ -221,6 +227,10 @@ def build_character_kpir(
             " Opis zdarzenia gospodarczego | i uslug | przychody| (7+8) |cen zakupu| uboczne"
             " |i naturze| wydatki | (12+13) | | opis |wartosc|",
         )
+        if full_header:
+            put(
+                0, 80, "| |darczego| | | | | zl.gr | zl.gr | zl.gr | zl.gr | zl.gr |kosztu| zl.gr |"
+            )
         put(0, 86, COLUMN_RULER)
 
         y = 100.0

@@ -144,3 +144,43 @@ class TestBBox:
         b = BBox(0.1, 0.0, 0.3, 0.1)
         assert a.horizontal_overlap(b) == pytest.approx(0.1)
         assert a.union(b).as_tuple() == (0.0, 0.0, 0.3, 0.1)
+
+
+class TestEmptyMarkerGlyphs:
+    """Regresja z realnego raportu: pustka oznaczana glifem ``˙`` (U+02D9).
+
+    NFKC rozkłada ten znak na spację + znak łączący, więc marker sprawdzany po
+    normalizacji nigdy nie pasował i każda pusta kwota stawała się błędem
+    krytycznym (415 problemów na jednym dokumencie).
+    """
+
+    MARKERS = ("˙", "·", "-")
+
+    def test_nfkc_would_destroy_the_marker(self) -> None:
+        import unicodedata
+
+        assert unicodedata.normalize("NFKC", "˙") != "˙"
+
+    @pytest.mark.parametrize("raw", ["˙", "˙ ˙", "˙˙", "˙ ˙ ˙", " ˙ "])
+    def test_money_marker_is_empty_not_error(self, raw: str) -> None:
+        assert parse_money(raw, empty_markers=self.MARKERS) is None
+
+    @pytest.mark.parametrize("raw", ["˙", "˙ ˙"])
+    def test_date_marker_is_empty_not_error(self, raw: str) -> None:
+        assert parse_business_date(raw, empty_markers=self.MARKERS) is None
+
+    def test_real_amounts_still_parse(self) -> None:
+        assert parse_money("1820.00", empty_markers=self.MARKERS).as_text() == "1820.00"
+        assert parse_money("15 000,00", empty_markers=self.MARKERS).as_text() == "15000.00"
+
+    def test_zero_is_not_treated_as_empty(self) -> None:
+        assert parse_money("0.00", empty_markers=self.MARKERS).as_text() == "0.00"
+
+    def test_marker_mixed_with_digits_is_still_an_error(self) -> None:
+        """``˙5`` nie jest ani pustką, ani poprawną kwotą."""
+        with pytest.raises(ParseError):
+            parse_money("˙5", empty_markers=self.MARKERS)
+
+    def test_no_markers_configured_keeps_old_behaviour(self) -> None:
+        with pytest.raises(ParseError):
+            parse_money("˙")

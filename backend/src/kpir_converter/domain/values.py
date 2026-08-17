@@ -111,6 +111,32 @@ def _strip_spaces(text: str) -> str:
     return text
 
 
+def is_empty_marker(raw: str, empty_markers: tuple[str, ...]) -> bool:
+    """True when the text is only "empty field" glyphs.
+
+    Must be evaluated on the RAW text, before NFKC normalisation: that mapping
+    decomposes some report glyphs (e.g. ``˙`` U+02D9 becomes space + combining
+    dot), so a normalised string would never match the configured marker.
+
+    A cell may hold several markers, one per printed sub-column, so the whole
+    text counts as empty when every non-space piece is a marker.
+    """
+    if not empty_markers:
+        return False
+    text = str(raw).strip()
+    if not text:
+        return False
+    markers = set(empty_markers)
+    if text in markers:
+        return True
+    pieces = text.split()
+    if pieces and all(piece in markers for piece in pieces):
+        return True
+    # Markers printed without separating spaces, e.g. "˙˙".
+    distinct = set(text)
+    return bool(distinct) and all(char in markers for char in distinct)
+
+
 def parse_money(raw: str, *, empty_markers: tuple[str, ...] = ()) -> Money | None:
     """Parse a Polish-formatted amount.
 
@@ -119,6 +145,9 @@ def parse_money(raw: str, *, empty_markers: tuple[str, ...] = ()) -> Money | Non
     that into an ``INVALID_MONEY`` issue instead of guessing a value.
     """
     if raw is None:
+        return None
+    # Check markers on the raw text: NFKC would decompose glyphs such as U+02D9.
+    if is_empty_marker(raw, empty_markers):
         return None
     text = unicodedata.normalize("NFKC", str(raw)).strip()
     if text == "" or text in empty_markers:
@@ -230,6 +259,8 @@ def parse_business_date(
     :class:`ParseError` is raised instead of guessing the century.
     """
     if raw is None:
+        return None
+    if is_empty_marker(raw, empty_markers):
         return None
     text = unicodedata.normalize("NFKC", str(raw)).strip()
     if text == "" or text in empty_markers:

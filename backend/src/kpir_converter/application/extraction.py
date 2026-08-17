@@ -537,12 +537,18 @@ def detect_table_zone(
     header_bottom = 0.0
     footer_top = profile.footer_zone_min_y
 
-    # The strongest signal is the row of printed column numbers (1..16).
+    # The strongest signal is the row of printed column numbers (1..17). It is
+    # the last line of the header, whatever precedes it.
     form_numbers = [c.form_number for c in profile.columns if c.form_number]
     if form_numbers:
         wanted = set(form_numbers)
         for line in lines:
             texts = [t.raw_text.strip() for t in line.tokens]
+            # Character-drawn reports emit the whole ruler as a single token
+            # ("|_1_|__2__|...") because it contains no spaces.
+            if len(texts) == 1 and _RULER_LINE_RE.match(texts[0]):
+                header_bottom = max(header_bottom, line.bottom)
+                continue
             if len(texts) < max(3, len(wanted) // 2):
                 continue
             hits = sum(1 for t in texts if t in wanted)
