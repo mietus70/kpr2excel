@@ -82,7 +82,7 @@ columns:
     type: text
     x0: 0.0506
     x1: 0.1105
-    required: true
+    required: false
     header_keywords: ["Nr dowodu", "księgowego"]
     xlsx_width: 20
 

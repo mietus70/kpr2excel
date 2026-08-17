@@ -257,6 +257,8 @@ def parse_business_date(
     A two-digit year requires an explicit context year (``century_pivot_year``,
     normally the document period year); otherwise the value is ambiguous and a
     :class:`ParseError` is raised instead of guessing the century.
+    
+    Enhanced to handle dirty text by extracting date patterns from mixed content.
     """
     if raw is None:
         return None
@@ -265,7 +267,15 @@ def parse_business_date(
     text = unicodedata.normalize("NFKC", str(raw)).strip()
     if text == "" or text in empty_markers:
         return None
-    text = _strip_spaces(text) if text.count(" ") > 2 else text
+    
+    # Try to extract date pattern from dirty text (e.g., "02.01.18 Alarmkomplex")
+    # Look for DD.MM.RR or DD.MM.RRRR pattern at the start
+    date_pattern = re.match(r'^(\d{1,2})[.\-/ ](\d{1,2})[.\-/ ](\d{2,4})', text)
+    if date_pattern:
+        day, month, year_text = date_pattern.groups()
+        text = f"{day}.{month}.{year_text}"  # Use clean date pattern
+    else:
+        text = _strip_spaces(text) if text.count(" ") > 2 else text
 
     iso = _ISO_RE.match(text)
     if iso:

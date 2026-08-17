@@ -95,6 +95,9 @@ def assign_token_to_column(
       4. otherwise report ambiguity instead of guessing.
 
     Returns ``(column_key, share, crosses_boundary)``.
+    
+    Enhanced to better handle tokens that cross column boundaries by preferring
+    the column where the majority of the token lies, even if the split is uneven.
     """
     width = token_bbox.width
     if width <= 0:
