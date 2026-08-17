@@ -180,6 +180,22 @@ Golden fixtures są generowane syntetycznie i **nie zawierają danych osobowych*
 Nie aktualizuj ich automatycznie bez obejrzenia różnicy — regresja jakości
 ekstrakcji jest błędem nawet wtedy, gdy testy techniczne przechodzą.
 
+## Diagnostyka: dlaczego eksport jest zablokowany
+
+Gdy podsumowanie eksportu pokazuje problemy krytyczne, przyczynę wskaże:
+
+```bash
+python scripts/diagnose.py                     # wszystkie dokumenty
+python scripts/diagnose.py --document <uuid>   # jeden dokument
+python scripts/diagnose.py --show-values       # dołącz wartości komórek
+```
+
+Skrypt grupuje problemy według kodu, pokazuje najczęściej dotknięte kolumny
+i wypisuje przykładowe wiersze z tekstem surowym oraz wartością sparsowaną.
+Jeśli wartości trafiły do niewłaściwych kolumn (np. nazwa kontrahenta w kolumnie
+daty), oznacza to, że profil nie pasuje do wariantu formularza — patrz
+„Ograniczenia MVP".
+
 ## Usuwanie danych
 
 ```bash
