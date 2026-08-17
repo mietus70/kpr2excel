@@ -15,6 +15,8 @@ import type {
 
 type Tab = 'import' | 'review' | 'export';
 
+const EMPTY_RECORD_IDS: string[] = [];
+
 export function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [documents, setDocuments] = useState<KpirDocument[]>([]);
@@ -365,7 +367,7 @@ export function App() {
             documents={documents.filter((d) => d.status === 'ready')}
             initialDocumentIds={documents.filter((d) => d.status === 'ready').map((d) => d.id)}
             excludedRecordIds={excludedRecordIds}
-            explicitRecordIds={[]}
+            explicitRecordIds={EMPTY_RECORD_IDS}
             onClearRowSelection={() => setExcludedRecordIds([])}
           />
         )}

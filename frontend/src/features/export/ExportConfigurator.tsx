@@ -4,7 +4,7 @@
  * or the underlying data changes, and must be refreshed before exporting.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api } from '@/api/client';
 import { uniqueDocumentIds } from '@/features/export/documentSelection';
 import type {
@@ -111,15 +111,20 @@ export function ExportConfigurator({
       const added = uniqueIds.filter((id) => !current.includes(id));
       if (current.length === 0) return uniqueIds;
       if (added.length === 0 && kept.length === current.length) return current;
-      return [...kept.filter((id) => unique.has(id) || current.includes(id)), ...added];
+      return [...kept, ...added];
     });
   }, [documents, uniqueIds]);
 
-  // Any configuration change invalidates the preview.
+  // Invalidate preview only when the payload actually changes. A new object
+  // identity (parent re-render, job SSE tick) must not hide a finished download.
+  const definitionKey = JSON.stringify(definition);
+  const lastDefinitionKey = useRef(definitionKey);
   useEffect(() => {
+    if (lastDefinitionKey.current === definitionKey) return;
+    lastDefinitionKey.current = definitionKey;
     setStale(true);
     setDownload(null);
-  }, [definition]);
+  }, [definitionKey]);
 
   const toggleDocument = (id: string) => {
     setSelectedDocumentIds((ids) =>
