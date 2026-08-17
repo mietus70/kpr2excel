@@ -70,6 +70,54 @@ def render(text: str, show_text: bool, width: int = 22) -> str:
     return f"<{classify(text)}:{len(text)}>"
 
 
+def _find_stored_pdf(fragment: str, *, quiet: bool = False) -> Path | None:
+    """Znajduje oryginał PDF wczytany do aplikacji po fragmencie nazwy.
+
+    Aplikacja przechowuje niezmienioną kopię każdego dokumentu, więc nie trzeba
+    pamiętać, gdzie leżał plik źródłowy.
+    """
+    import sqlite3
+
+    from kpir_converter.config import get_settings
+
+    db_path = get_settings().data_dir / "app.db"
+    if not db_path.exists():
+        if not quiet:
+            print(f"Nie znaleziono bazy: {db_path}", file=sys.stderr)
+        return None
+
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT original_name, stored_path FROM documents WHERE deleted_at IS NULL"
+        " ORDER BY original_name"
+    ).fetchall()
+    conn.close()
+
+    matches = [r for r in rows if fragment.lower() in (r["original_name"] or "").lower()]
+    if not matches:
+        if not quiet:
+            print(f"Brak dokumentu pasującego do: {fragment}", file=sys.stderr)
+            if rows:
+                print("Dostępne dokumenty:", file=sys.stderr)
+                for row in rows:
+                    print(f"  {row['original_name']}", file=sys.stderr)
+        return None
+    if len(matches) > 1 and not quiet:
+        print(f"Pasuje {len(matches)} dokumentów, biorę pierwszy:", file=sys.stderr)
+        for row in matches:
+            print(f"  {row['original_name']}", file=sys.stderr)
+
+    path = Path(matches[0]["stored_path"])
+    if not path.exists():
+        if not quiet:
+            print(f"Brak pliku na dysku: {path}", file=sys.stderr)
+        return None
+    if not quiet:
+        print(f"Dokument: {matches[0]['original_name']}")
+    return path
+
+
 def _compare_layout(pdf: object) -> int:
     """Wypisuje wykryty układ kolumn dla każdej strony.
 
@@ -133,7 +181,17 @@ def _compare_layout(pdf: object) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Podgląd geometrii strony PDF.")
-    parser.add_argument("pdf", type=Path, help="ścieżka do pliku PDF")
+    parser.add_argument(
+        "pdf",
+        type=Path,
+        nargs="?",
+        help="ścieżka do pliku PDF (albo użyj --doc)",
+    )
+    parser.add_argument(
+        "--doc",
+        default=None,
+        help="fragment nazwy dokumentu wczytanego do aplikacji (szuka w bazie)",
+    )
     parser.add_argument("--page", type=int, default=1, help="numer strony (1-based)")
     parser.add_argument(
         "--show-text", action="store_true", help="pokaż treść tokenów (DANE WRAŻLIWE)"
@@ -153,8 +211,20 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.doc:
+        resolved = _find_stored_pdf(args.doc)
+        if resolved is None:
+            return 1
+        args.pdf = resolved
+    elif args.pdf is None:
+        print("Podaj ścieżkę do PDF albo --doc <fragment nazwy>.", file=sys.stderr)
+        return 1
+
     if not args.pdf.exists():
         print(f"Nie znaleziono pliku: {args.pdf}", file=sys.stderr)
+        hint = _find_stored_pdf(args.pdf.name, quiet=True)
+        if hint is not None:
+            print(f"Ten dokument jest w aplikacji. Użyj:  --doc {args.pdf.stem}", file=sys.stderr)
         return 1
 
     with PdfDocumentAdapter(args.pdf) as pdf:

@@ -202,6 +202,7 @@ Jeśli diagnostyka pokaże, że wartości trafiają do złych kolumn, dokument m
 prawdopodobnie inny układ niż profil. Geometrię sprawdzisz bez ujawniania danych:
 
 ```bash
+python scripts/inspect_layout.py --doc 1812             # dokument wczytany do aplikacji
 python scripts/inspect_layout.py twoj-plik.pdf          # tryb bezpieczny
 python scripts/inspect_layout.py twoj-plik.pdf --show-text   # z treścią
 python scripts/inspect_layout.py twoj-plik.pdf --suggest-profile > profiles/moj.yaml
